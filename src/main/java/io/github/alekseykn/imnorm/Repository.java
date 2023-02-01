@@ -39,4 +39,6 @@ public abstract class Repository<Value> {
     public abstract Set<Value> findAll(int startIndex, int rowCount);
 
     public abstract Value delete(Object id);
+
+    public abstract void flush();
 }

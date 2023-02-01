@@ -26,7 +26,8 @@ public class DataStorage {
     public <Value> Repository<Value> getFastRepositoryForClass(Class<Value> clas) {
         if(!createdRepository.containsKey(clas)) {
             createdRepository.put(clas,
-                    new FastRepository<>(clas, Path.of(nowPath.toString(), clas.getName()).toFile()));
+                    new FastRepository<>(clas,
+                            Path.of(nowPath.toString(), clas.getName().replace('.', '_')).toFile()));
         }
         return (Repository<Value>) createdRepository.get(clas);
     }
