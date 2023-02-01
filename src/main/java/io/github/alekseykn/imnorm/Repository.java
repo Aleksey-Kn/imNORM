@@ -1,8 +1,9 @@
-package ru.imnormproject.imnorm.repositories;
+package io.github.alekseykn.imnorm;
 
-import ru.imnormproject.imnorm.annotations.Id;
-import ru.imnormproject.imnorm.exceptions.CountIdException;
+import io.github.alekseykn.imnorm.annotations.Id;
+import io.github.alekseykn.imnorm.exceptions.CountIdException;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -13,8 +14,11 @@ public abstract class Repository<Value, Key> {
     protected final Set<Value> blockingRecord = new HashSet<>();
     protected final Field recordId;
     protected final boolean needGenerateId;
+    protected final File directory;
 
-    protected Repository(Class<Value> type) {
+    protected Repository(Class<Value> type, File directory) {
+        this.directory = directory;
+
         Field[] fields = Arrays.stream(type.getDeclaredFields())
                 .filter(field -> Objects.nonNull(field.getAnnotation(Id.class)))
                 .toArray(Field[]::new);

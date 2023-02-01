@@ -1,6 +1,4 @@
-package ru.imnormproject.imnorm;
-
-import ru.imnormproject.imnorm.repositories.Repository;
+package io.github.alekseykn.imnorm;
 
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -19,9 +17,17 @@ public class DataStorage {
 
 
     private final Path nowPath;
-    private final Map<Class, Repository> createdRepository = new HashMap<>();
+    private final Map<Class<?>, Repository<?, ?>> createdRepository = new HashMap<>();
 
     private DataStorage(Path path) {
         nowPath = path;
+    }
+
+    public <Value, Key> Repository<Value, Key> getFastRepositoryForClass(Class<Value> clas) {
+        if(!createdRepository.containsKey(clas)) {
+            createdRepository.put(clas,
+                    new FastRepository<>(clas, Path.of(nowPath.toString(), clas.getName()).toFile()));
+        }
+        return (Repository<Value, Key>) createdRepository.get(clas);
     }
 }

@@ -1,4 +1,4 @@
-package ru.imnormproject.imnorm.annotations;
+package io.github.alekseykn.imnorm.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
