@@ -55,4 +55,9 @@ public final class FastRepository<Value> extends Repository<Value> {
     public Value delete(Object id) {
         return null;
     }
+
+    @Override
+    public void flush() {
+        
+    }
 }
