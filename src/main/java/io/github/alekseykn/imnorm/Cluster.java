@@ -32,6 +32,10 @@ public final class Cluster<Value> {
     int size() {
         return data.size();
     }
+    
+    boolean containsKey(Object key) {
+        return data.containsKey(key);
+    }
 
     boolean isRedacted() {
         return redacted;
