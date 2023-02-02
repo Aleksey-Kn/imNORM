@@ -47,7 +47,7 @@ public final class FastRepository<Value> extends Repository<Value> {
 
     @Override
     public Set<Value> findAll() {
-        return null;
+        return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
     }
 
     @Override
