@@ -39,7 +39,7 @@ public final class FastRepository<Value> extends Repository<Value> {
 
     @Override
     public Value find(Object id) {
-        return null;
+        return data.floorEntry(String.valueOf(id)).getValue().get(id);
     }
 
     @Override
@@ -54,11 +54,22 @@ public final class FastRepository<Value> extends Repository<Value> {
 
     @Override
     public Value delete(Object id) {
-        return null;
+        return data.floorEntry(String.valueOf(id)).getValue().delete(id);
     }
 
     @Override
     public void flush() {
-        
+        data.entrySet().parallelStream()
+                .filter(e -> e.getValue().isRedacted())
+                .forEach(entry -> {
+                    try {
+                        PrintWriter printWriter = new PrintWriter(entry.getKey());
+                        entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
+                        printWriter.close();
+                        entry.getValue().wasFlush();
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    }
+                });
     }
 }
