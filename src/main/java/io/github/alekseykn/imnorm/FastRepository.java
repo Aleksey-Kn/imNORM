@@ -9,22 +9,23 @@ import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class FastRepository<Value> extends Repository<Value> {
-    private final TreeMap<String, ConcurrentHashMap<Object, Value>> data = new TreeMap<>();
+    private final TreeMap<String, Cluster<Value>> data = new TreeMap<>();
 
     FastRepository(Class<Value> type, File directory) {
         super(type, directory);
         Scanner scanner;
         Value now;
-        ConcurrentHashMap<Object, Value> cluster;
+        ConcurrentHashMap<Object, Value> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                cluster = data.put(file.getName(), new ConcurrentHashMap<>());
-                assert cluster != null;
+                tempClusterData = new ConcurrentHashMap<>();
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
-                    cluster.put(recordId.get(now), now);
+                    tempClusterData.put(recordId.get(now), now);
                 }
+                scanner.close();
+                data.put(file.getName(), new Cluster<>(tempClusterData));
             }
         } catch (FileNotFoundException | IllegalAccessException e) {
             e.printStackTrace();
