@@ -30,15 +30,44 @@ public abstract class Repository<Value> {
         needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
     }
 
-    public abstract Value save(Value o);
+    protected abstract Cluster<Value> findCurrentCluster(Object recordInCluster);
 
-    public abstract Value find(Object id);
+    protected abstract Value create(Object id, Value record);
+
+    public Value save(Value record) {
+        try {
+            Cluster<Value> cluster = findCurrentCluster(record);
+            Object key = recordId.get(record);
+            if (cluster.containsKey(key)) {
+                cluster.set(key, record);
+                return record;
+            } else {
+                return create(key, record);
+            }
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e.getMessage());
+        }
+    }
+
+    public Value findById(Object id) {
+        return findCurrentCluster(id).get(id);
+    }
 
     public abstract Set<Value> findAll();
 
     public abstract Set<Value> findAll(int startIndex, int rowCount);
 
-    public abstract Value delete(Object id);
+    public Value deleteById(Object id) {
+        return findCurrentCluster(id).delete(id);
+    }
+
+    public Value delete(Value record) {
+        try {
+            return deleteById(recordId.get(record));
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e.getMessage());
+        }
+    }
 
     public abstract void flush();
 }
