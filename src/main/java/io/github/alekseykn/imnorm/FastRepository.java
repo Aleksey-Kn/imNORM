@@ -1,12 +1,13 @@
 package io.github.alekseykn.imnorm;
 
+import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
+
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.Objects;
-import java.util.Scanner;
-import java.util.Set;
-import java.util.TreeMap;
+import java.io.PrintWriter;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public final class FastRepository<Value> extends Repository<Value> {
     private final TreeMap<String, Cluster<Value>> data = new TreeMap<>();
@@ -52,7 +53,39 @@ public final class FastRepository<Value> extends Repository<Value> {
 
     @Override
     public Set<Value> findAll(int startIndex, int rowCount) {
-        return null;
+        LinkedHashSet<Value> result = new LinkedHashSet<>(rowCount);
+        List<Value> afterSkippedClusterValues;
+        for (Collection<Value> clusterRecord
+                : data.values().stream().map(Cluster::findAll).collect(Collectors.toList())) {
+            if (clusterRecord.size() < startIndex) {
+                startIndex -= clusterRecord.size();
+            } else {
+                afterSkippedClusterValues = clusterRecord.stream()
+                        .sorted((first, second) -> {
+                            try {
+                                Object firstKey = recordId.get(first);
+                                Object secondKey = recordId.get(second);
+                                if (firstKey instanceof Comparable) {
+                                    return ((Comparable) firstKey).compareTo(secondKey);
+                                } else {
+                                    return String.valueOf(firstKey).compareTo(String.valueOf(secondKey));
+                                }
+                            } catch (IllegalAccessException e) {
+                                throw new RuntimeException(e);
+                            }
+                        })
+                        .skip(startIndex)
+                        .limit(rowCount)
+                        .collect(Collectors.toList());
+                result.addAll(afterSkippedClusterValues);
+
+                rowCount -= afterSkippedClusterValues.size();
+                startIndex = 0;
+            }
+            if (rowCount == 0)
+                break;
+        }
+        return result;
     }
 
     @Override
