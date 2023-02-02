@@ -3,6 +3,7 @@ package io.github.alekseykn.imnorm;
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.annotations.Id;
 import io.github.alekseykn.imnorm.exceptions.CountIdException;
+import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.File;
 import java.lang.reflect.Field;
