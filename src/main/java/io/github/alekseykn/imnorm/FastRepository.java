@@ -24,7 +24,6 @@ public final class FastRepository<Value> extends Repository<Value> {
                     now = gson.fromJson(scanner.nextLine(), type);
                     tempClusterData.put(recordId.get(now), now);
                 }
-                scanner.close();
                 data.put(file.getName(), new Cluster<>(tempClusterData));
             }
         } catch (FileNotFoundException | IllegalAccessException e) {
@@ -33,13 +32,17 @@ public final class FastRepository<Value> extends Repository<Value> {
     }
 
     @Override
-    public Value save(Value o) {
-        return null;
+    protected Cluster<Value> findCurrentCluster(Object recordInCluster) {
+        try {
+            return data.floorEntry(String.valueOf(recordId.get(recordInCluster))).getValue();
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e.getMessage());
+        }
     }
 
     @Override
-    public Value find(Object id) {
-        return data.floorEntry(String.valueOf(id)).getValue().get(id);
+    protected Value create(Object id, Value value) {
+        return null;
     }
 
     @Override
@@ -53,17 +56,12 @@ public final class FastRepository<Value> extends Repository<Value> {
     }
 
     @Override
-    public Value delete(Object id) {
-        return data.floorEntry(String.valueOf(id)).getValue().delete(id);
-    }
-
-    @Override
     public void flush() {
         data.entrySet().parallelStream()
                 .filter(e -> e.getValue().isRedacted())
                 .forEach(entry -> {
                     try {
-                        PrintWriter printWriter = new PrintWriter(entry.getKey());
+                        PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
                         entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
                         printWriter.close();
                         entry.getValue().wasFlush();
