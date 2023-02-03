@@ -40,9 +40,7 @@ public abstract class Repository<Value> {
             Cluster<Value> cluster = findCurrentCluster(record);
             Object key = recordId.get(record);
             if (cluster.containsKey(key)) {
-                synchronized (cluster) {
-                    cluster.set(key, record);
-                }
+                cluster.set(key, record);
                 return record;
             } else {
                 return create(key, record);
@@ -61,10 +59,7 @@ public abstract class Repository<Value> {
     public abstract Set<Value> findAll(int startIndex, int rowCount);
 
     public Value deleteById(Object id) {
-        Cluster<Value> cluster = findCurrentCluster(id);
-        synchronized (cluster) {
-            return cluster.delete(id);
-        }
+        return findCurrentCluster(id).delete(id);
     }
 
     public Value delete(Value record) {
