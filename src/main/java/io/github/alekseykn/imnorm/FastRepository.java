@@ -18,7 +18,7 @@ public final class FastRepository<Record> extends Repository<Record> {
         TreeMap<Object, Record> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                tempClusterData = new TreeMap<>();
+                tempClusterData = new TreeMap<>(Comparator.comparing(String::valueOf));
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
@@ -66,7 +66,7 @@ public final class FastRepository<Record> extends Repository<Record> {
 
     @Override
     public synchronized Set<Record> findAll(int startIndex, int rowCount) {
-        LinkedHashSet<Record> result = new LinkedHashSet<>(rowCount);
+        HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         for (Collection<Record> clusterRecord
                 : data.values().stream().map(Cluster::findAll).collect(Collectors.toList())) {
@@ -74,7 +74,13 @@ public final class FastRepository<Record> extends Repository<Record> {
                 startIndex -= clusterRecord.size();
             } else {
                 afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted(new IdComparator(recordId))
+                        .sorted(Comparator.comparing(record -> {
+                            try {
+                                return String.valueOf(recordId.get(record));
+                            } catch (IllegalAccessException e) {
+                                throw new InternalImnormException(e.getMessage());
+                            }
+                        }))
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
