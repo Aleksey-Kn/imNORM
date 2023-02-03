@@ -42,8 +42,21 @@ public final class FastRepository<Value> extends Repository<Value> {
     }
 
     @Override
-    protected Value create(Object id, Value value) {
-        return null;
+    protected synchronized Value create(Object id, Value value) {
+        String stringId = String.valueOf(id);
+        if(needGenerateId) {
+            //TODO: autogenerate
+        }
+        if (data.isEmpty() || data.firstKey().compareTo(stringId) < 0) {
+            data.put(stringId, new Cluster<>(id, value));
+        } else {
+            Cluster<Value> currentCluster = findCurrentCluster(id);
+            currentCluster.set(id, value);
+            if(currentCluster.size() * sizeOfEntity > 100_000) {
+                //TODO: add split cluster
+            }
+        }
+        return value;
     }
 
     @Override
