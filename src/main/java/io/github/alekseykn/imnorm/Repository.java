@@ -8,14 +8,14 @@ import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 public abstract class Repository<Value> {
-    protected final Set<Value> blockingRecord = ConcurrentHashMap.newKeySet();
-    protected final Field recordId;
+    protected final Set<String> blockingId = ConcurrentHashMap.newKeySet();
+    protected final Function<Value, String> getStringIdFromRecord;
     protected final boolean needGenerateId;
     protected final File directory;
     protected final Gson gson = new Gson();
@@ -29,31 +29,45 @@ public abstract class Repository<Value> {
                 .toArray(Field[]::new);
         if (fields.length != 1)
             throw new CountIdException(type);
-        recordId = fields[0];
-        needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
-        sizeOfEntity = type.getDeclaredFields().length * 75;
+        getStringIdFromRecord = record -> {
+            try {
+                return String.valueOf(fields[0].get(record));
+            } catch (IllegalAccessException e) {
+                throw new InternalImnormException(e.getMessage());
+            }
+        };
+        needGenerateId = fields[0].getAnnotation(Id.class).autoGenerate();
+        sizeOfEntity = type.getDeclaredFields().length * 50;
     }
 
-    protected abstract Cluster<Value> findCurrentCluster(Object recordInCluster);
+    protected void waitRecordForTransactions(String id) {
+        int time = 10;
+        try {
+            while (blockingId.contains(id)) {
+                Thread.sleep(time);
+                time *= 2;
+            }
+        } catch (InterruptedException ignored) {}
+    }
+
+    protected abstract Cluster<Value> findCurrentCluster(Object id);
 
     protected abstract Value create(Object id, Value record);
 
     public Value save(Value record) {
-        try {
-            Cluster<Value> cluster = findCurrentCluster(record);
-            Object key = recordId.get(record);
-            if (Objects.nonNull(cluster) && cluster.containsKey(key)) {
-                cluster.set(key, record);
-                return record;
-            } else {
-                return create(key, record);
-            }
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e.getMessage());
+        Cluster<Value> cluster = findCurrentCluster(record);
+        String key = getStringIdFromRecord.apply(record);
+        if (Objects.nonNull(cluster) && cluster.containsKey(key)) {
+            waitRecordForTransactions(key);
+            cluster.set(key, record);
+            return record;
+        } else {
+            return create(key, record);
         }
     }
 
-    public Value findById(Object id) {
+    public Value findById(String id) {
+        waitRecordForTransactions(id);
         return findCurrentCluster(id).get(id);
     }
 
@@ -61,16 +75,13 @@ public abstract class Repository<Value> {
 
     public abstract Set<Value> findAll(int startIndex, int rowCount);
 
-    public Value deleteById(Object id) {
+    //TODO: drop into child
+    public Value deleteById(String id) {
         return findCurrentCluster(id).delete(id);
     }
 
     public Value delete(Value record) {
-        try {
-            return deleteById(recordId.get(record));
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e.getMessage());
-        }
+        return deleteById(getStringIdFromRecord.apply(record));
     }
 
     public abstract void flush();
