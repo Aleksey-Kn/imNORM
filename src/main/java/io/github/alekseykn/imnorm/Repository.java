@@ -75,10 +75,7 @@ public abstract class Repository<Value> {
 
     public abstract Set<Value> findAll(int startIndex, int rowCount);
 
-    //TODO: drop into child
-    public Value deleteById(String id) {
-        return findCurrentCluster(id).delete(id);
-    }
+    public abstract Value deleteById(String id);
 
     public Value delete(Value record) {
         return deleteById(getStringIdFromRecord.apply(record));

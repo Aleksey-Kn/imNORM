@@ -30,73 +30,96 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized Cluster<Record> findCurrentCluster(Object id) {
-        return data.floorEntry(String.valueOf(id)).getValue();
+    protected Cluster<Record> findCurrentCluster(Object id) {
+        synchronized (data) {
+            return data.floorEntry(String.valueOf(id)).getValue();
+        }
     }
 
     @Override
-    protected synchronized Record create(Object id, Record record) {
+    protected Record create(Object id, Record record) {
         String stringId = String.valueOf(id);
         if(needGenerateId) {
             //TODO: autogenerate
         }
-        if (data.isEmpty() || data.firstKey().compareTo(stringId) < 0) {
-            data.put(stringId, new Cluster<>(stringId, record));
-        } else {
-            Cluster<Record> currentCluster = findCurrentCluster(id);
-            currentCluster.set(stringId, record);
-            if(currentCluster.size() * sizeOfEntity > 100_000) {
-                Cluster<Record> newCluster = currentCluster.split();
-                data.put(String.valueOf(currentCluster.firstKey()), newCluster);
+        synchronized (data) {
+            if (data.isEmpty() || data.firstKey().compareTo(stringId) < 0) {
+                data.put(stringId, new Cluster<>(stringId, record));
+            } else {
+                Cluster<Record> currentCluster = findCurrentCluster(id);
+                currentCluster.set(stringId, record);
+                if (currentCluster.size() * sizeOfEntity > 100_000) {
+                    Cluster<Record> newCluster = currentCluster.split();
+                    data.put(String.valueOf(currentCluster.firstKey()), newCluster);
+                }
             }
         }
         return record;
     }
 
     @Override
-    public synchronized Set<Record> findAll() {
-        return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
+    public Set<Record> findAll() {
+        synchronized (data) {
+            return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
+        }
     }
 
     @Override
-    public synchronized Set<Record> findAll(int startIndex, int rowCount) {
+    public Set<Record> findAll(int startIndex, int rowCount) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
-        for (Collection<Record> clusterRecord
-                : data.values().stream().map(Cluster::findAll).collect(Collectors.toList())) {
-            if (clusterRecord.size() < startIndex) {
-                startIndex -= clusterRecord.size();
-            } else {
-                afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted(Comparator.comparing(getStringIdFromRecord))
-                        .skip(startIndex)
-                        .limit(rowCount)
-                        .collect(Collectors.toList());
-                result.addAll(afterSkippedClusterValues);
+        synchronized (data) {
+            for (Collection<Record> clusterRecord
+                    : data.values().stream().map(Cluster::findAll).collect(Collectors.toList())) {
+                if (clusterRecord.size() < startIndex) {
+                    startIndex -= clusterRecord.size();
+                } else {
+                    afterSkippedClusterValues = clusterRecord.stream()
+                            .sorted(Comparator.comparing(getStringIdFromRecord))
+                            .skip(startIndex)
+                            .limit(rowCount)
+                            .collect(Collectors.toList());
+                    result.addAll(afterSkippedClusterValues);
 
-                rowCount -= afterSkippedClusterValues.size();
-                startIndex = 0;
+                    rowCount -= afterSkippedClusterValues.size();
+                    startIndex = 0;
+                }
+                if (rowCount == 0)
+                    break;
             }
-            if (rowCount == 0)
-                break;
         }
         return result;
     }
 
     @Override
-    public synchronized void flush() {
-        data.entrySet().parallelStream()
-                .filter(e -> e.getValue().isRedacted())
-                .forEach(entry -> {
-                    try {
-                        PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
-                        entry.getValue().findAll().forEach(record -> printWriter.println(gson.toJson(record)));
-                        entry.getValue().wasFlush();
-                        printWriter.close();
-                    } catch (FileNotFoundException e) {
-                        e.printStackTrace();
-                    }
-                });
+    public Record deleteById(String id) {
+        waitRecordForTransactions(id);
+        Cluster<Record> cluster = findCurrentCluster(id);
+        synchronized (data) {
+            Record record = cluster.delete(id);
+            if (cluster.isEmpty()) {
+
+            }
+            return record;
+        }
+    }
+
+    @Override
+    public void flush() {
+        synchronized (data) {
+            data.entrySet().parallelStream()
+                    .filter(e -> e.getValue().isRedacted())
+                    .forEach(entry -> {
+                        try {
+                            PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
+                            entry.getValue().findAll().forEach(record -> printWriter.println(gson.toJson(record)));
+                            entry.getValue().wasFlush();
+                            printWriter.close();
+                        } catch (FileNotFoundException e) {
+                            e.printStackTrace();
+                        }
+                    });
+        }
     }
 }
 
