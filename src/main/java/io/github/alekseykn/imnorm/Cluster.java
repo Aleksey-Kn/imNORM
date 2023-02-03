@@ -1,30 +1,36 @@
 package io.github.alekseykn.imnorm;
 
 import java.util.Collection;
-import java.util.ConcurrentHashMap;
+import java.util.Map;
+import java.util.TreeMap;
 
-public final class Cluster<Value> {
+public final class Cluster<Record> {
     private boolean redacted = false;
-    private final ConcurrentHashMap<Object, Value> data;
+    private final TreeMap<Object, Record> data;
 
-    Cluster(ConcurrentHashMap<Object, Value> map) {
+    Cluster(TreeMap<Object, Record> map) {
         data = map;
     }
 
-    void set(Object key, Value value) {
-        redacted = true;
-        data.put(key, value);
+    Cluster(Object id, Record record) {
+        data = new TreeMap<>();
+        data.put(id, record);
     }
 
-    Value get(Object key) {
+    void set(Object key, Record record) {
+        redacted = true;
+        data.put(key, record);
+    }
+
+    Record get(Object key) {
         return data.get(key);
     }
 
-    Collection<Value> findAll() {
+    Collection<Record> findAll() {
         return data.values();
     }
 
-    Value delete(Object key) {
+    Record delete(Object key) {
         redacted = true;
         return data.remove(key);
     }
@@ -32,29 +38,34 @@ public final class Cluster<Value> {
     int size() {
         return data.size();
     }
-    
+
     boolean containsKey(Object key) {
         return data.containsKey(key);
     }
-    
+
     Object firstKey() {
-        return data.keySet().stream()
-                .min((first, second) -> {
-                    if (first instanceof Comparable) {
-                        return ((Comparable) first).compareTo(second);
-                    } else {
-                        return String.valueOf(first).compareTo(String.valueOf(second));
-                    }
-                })
-                .orElseThrow();
+        return data.firstKey();
     }
-    
+
     boolean isEmpty() {
         return size() == 0;
     }
 
     boolean isRedacted() {
         return redacted;
+    }
+
+    Cluster<Record> split() {
+        TreeMap<Object, Record> newClusterData = new TreeMap<>();
+        int counter = 0;
+        final int median = data.size() / 2;
+        for(Map.Entry<Object, Record> entry: data.entrySet()) {
+            if(counter++ > median) {
+                newClusterData.put(entry.getKey(), entry.getValue());
+                data.remove(entry.getKey());
+            }
+        }
+        return new Cluster<>(newClusterData);
     }
 
     void wasFlush() {
