@@ -1,6 +1,7 @@
 package io.github.alekseykn.imnorm;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -13,7 +14,7 @@ public final class Cluster<Record> {
     }
 
     Cluster(Object id, Record record) {
-        data = new TreeMap<>();
+        data = new TreeMap<>(Comparator.comparing(String::valueOf));
         data.put(id, record);
     }
 
@@ -56,7 +57,7 @@ public final class Cluster<Record> {
     }
 
     Cluster<Record> split() {
-        TreeMap<Object, Record> newClusterData = new TreeMap<>();
+        TreeMap<Object, Record> newClusterData = new TreeMap<>(Comparator.comparing(String::valueOf));
         int counter = 0;
         final int median = data.size() / 2;
         for(Map.Entry<Object, Record> entry: data.entrySet()) {
