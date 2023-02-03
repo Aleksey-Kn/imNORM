@@ -36,6 +36,22 @@ public final class Cluster<Value> {
     boolean containsKey(Object key) {
         return data.containsKey(key);
     }
+    
+    Object firstKey() {
+        return data.keySet().stream()
+                .min((first, second) -> {
+                    if (first instanceof Comparable) {
+                        return ((Comparable) first).compareTo(second);
+                    } else {
+                        return String.valueOf(first).compareTo(String.valueOf(second));
+                    }
+                })
+                .orElseThrow();
+    }
+    
+    boolean isEmpty() {
+        return size() == 0;
+    }
 
     boolean isRedacted() {
         return redacted;
