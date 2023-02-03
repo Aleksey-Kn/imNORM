@@ -42,7 +42,7 @@ public abstract class Repository<Value> {
         try {
             Cluster<Value> cluster = findCurrentCluster(record);
             Object key = recordId.get(record);
-            if (cluster.containsKey(key)) {
+            if (Objects.nonNull(cluster) && cluster.containsKey(key)) {
                 cluster.set(key, record);
                 return record;
             } else {
