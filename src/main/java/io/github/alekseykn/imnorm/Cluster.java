@@ -1,7 +1,7 @@
 package io.github.alekseykn.imnorm;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.ConcurrentHashMap;
 
 public final class Cluster<Value> {
     private boolean redacted = false;
