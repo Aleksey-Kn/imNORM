@@ -1,29 +1,28 @@
 package io.github.alekseykn.imnorm;
 
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.TreeMap;
 
 public final class Cluster<Record> {
     private boolean redacted = false;
-    private final TreeMap<Object, Record> data;
+    private final TreeMap<String, Record> data;
 
-    Cluster(TreeMap<Object, Record> map) {
+    Cluster(TreeMap<String, Record> map) {
         data = map;
     }
 
-    Cluster(Object id, Record record) {
-        data = new TreeMap<>(Comparator.comparing(String::valueOf));
+    Cluster(String id, Record record) {
+        data = new TreeMap<>();
         data.put(id, record);
     }
 
-    void set(Object key, Record record) {
+    void set(String key, Record record) {
         redacted = true;
         data.put(key, record);
     }
 
-    Record get(Object key) {
+    Record get(String key) {
         return data.get(key);
     }
 
@@ -31,7 +30,7 @@ public final class Cluster<Record> {
         return data.values();
     }
 
-    Record delete(Object key) {
+    Record delete(String key) {
         redacted = true;
         return data.remove(key);
     }
@@ -40,7 +39,7 @@ public final class Cluster<Record> {
         return data.size();
     }
 
-    boolean containsKey(Object key) {
+    boolean containsKey(String key) {
         return data.containsKey(key);
     }
 
@@ -57,10 +56,10 @@ public final class Cluster<Record> {
     }
 
     Cluster<Record> split() {
-        TreeMap<Object, Record> newClusterData = new TreeMap<>(Comparator.comparing(String::valueOf));
+        TreeMap<String, Record> newClusterData = new TreeMap<>();
         int counter = 0;
         final int median = data.size() / 2;
-        for(Map.Entry<Object, Record> entry: data.entrySet()) {
+        for(Map.Entry<String, Record> entry: data.entrySet()) {
             if(counter++ > median) {
                 newClusterData.put(entry.getKey(), entry.getValue());
                 data.remove(entry.getKey());
