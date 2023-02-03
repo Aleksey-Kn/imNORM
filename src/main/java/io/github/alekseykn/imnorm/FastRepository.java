@@ -6,20 +6,19 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-public final class FastRepository<Value> extends Repository<Value> {
-    private final TreeMap<String, Cluster<Value>> data = new TreeMap<>();
+public final class FastRepository<Record> extends Repository<Record> {
+    private final TreeMap<String, Cluster<Record>> data = new TreeMap<>();
 
-    FastRepository(Class<Value> type, File directory) {
+    FastRepository(Class<Record> type, File directory) {
         super(type, directory);
         Scanner scanner;
-        Value now;
-        ConcurrentHashMap<Object, Value> tempClusterData;
+        Record now;
+        TreeMap<Object, Record> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                tempClusterData = new ConcurrentHashMap<>();
+                tempClusterData = new TreeMap<>();
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
@@ -33,7 +32,7 @@ public final class FastRepository<Value> extends Repository<Value> {
     }
 
     @Override
-    protected Cluster<Value> findCurrentCluster(Object recordInCluster) {
+    protected synchronized Cluster<Record> findCurrentCluster(Object recordInCluster) {
         try {
             return data.floorEntry(String.valueOf(recordId.get(recordInCluster))).getValue();
         } catch (IllegalAccessException e) {
@@ -42,33 +41,34 @@ public final class FastRepository<Value> extends Repository<Value> {
     }
 
     @Override
-    protected synchronized Value create(Object id, Value value) {
+    protected synchronized Record create(Object id, Record record) {
         String stringId = String.valueOf(id);
         if(needGenerateId) {
             //TODO: autogenerate
         }
         if (data.isEmpty() || data.firstKey().compareTo(stringId) < 0) {
-            data.put(stringId, new Cluster<>(id, value));
+            data.put(stringId, new Cluster<>(id, record));
         } else {
-            Cluster<Value> currentCluster = findCurrentCluster(id);
-            currentCluster.set(id, value);
+            Cluster<Record> currentCluster = findCurrentCluster(id);
+            currentCluster.set(id, record);
             if(currentCluster.size() * sizeOfEntity > 100_000) {
-                //TODO: add split cluster
+                Cluster<Record> newCluster = currentCluster.split();
+                data.put(String.valueOf(currentCluster.firstKey()), newCluster);
             }
         }
-        return value;
+        return record;
     }
 
     @Override
-    public Set<Value> findAll() {
+    public synchronized Set<Record> findAll() {
         return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
     }
 
     @Override
-    public Set<Value> findAll(int startIndex, int rowCount) {
-        LinkedHashSet<Value> result = new LinkedHashSet<>(rowCount);
-        List<Value> afterSkippedClusterValues;
-        for (Collection<Value> clusterRecord
+    public synchronized Set<Record> findAll(int startIndex, int rowCount) {
+        LinkedHashSet<Record> result = new LinkedHashSet<>(rowCount);
+        List<Record> afterSkippedClusterValues;
+        for (Collection<Record> clusterRecord
                 : data.values().stream().map(Cluster::findAll).collect(Collectors.toList())) {
             if (clusterRecord.size() < startIndex) {
                 startIndex -= clusterRecord.size();
@@ -90,15 +90,15 @@ public final class FastRepository<Value> extends Repository<Value> {
     }
 
     @Override
-    public void flush() {
+    public synchronized void flush() {
         data.entrySet().parallelStream()
                 .filter(e -> e.getValue().isRedacted())
                 .forEach(entry -> {
                     try {
-                            PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
-                            entry.getValue().wasFlush();
-                            entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
-                            printWriter.close();
+                        PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
+                        entry.getValue().findAll().forEach(record -> printWriter.println(gson.toJson(record)));
+                        entry.getValue().wasFlush();
+                        printWriter.close();
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     }
