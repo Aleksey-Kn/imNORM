@@ -74,19 +74,7 @@ public final class FastRepository<Value> extends Repository<Value> {
                 startIndex -= clusterRecord.size();
             } else {
                 afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted((first, second) -> {
-                            try {
-                                Object firstKey = recordId.get(first);
-                                Object secondKey = recordId.get(second);
-                                if (firstKey instanceof Comparable) {
-                                    return ((Comparable) firstKey).compareTo(secondKey);
-                                } else {
-                                    return String.valueOf(firstKey).compareTo(String.valueOf(secondKey));
-                                }
-                            } catch (IllegalAccessException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
+                        .sorted(new IdComparator(recordId))
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
