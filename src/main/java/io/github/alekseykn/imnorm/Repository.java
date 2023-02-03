@@ -11,13 +11,15 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class Repository<Value> {
-    protected final Set<Value> blockingRecord = new HashSet<>();
+    protected final Set<Value> blockingRecord = ConcurrentHashMap.newKeySet();
     protected final Field recordId;
     protected final boolean needGenerateId;
     protected final File directory;
     protected final Gson gson = new Gson();
+    protected final int sizeOfEntity;
 
     protected Repository(Class<Value> type, File directory) {
         this.directory = directory;
@@ -29,6 +31,7 @@ public abstract class Repository<Value> {
             throw new CountIdException(type);
         recordId = fields[0];
         needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
+        sizeOfEntity = type.getDeclaredFields().length * 75;
     }
 
     protected abstract Cluster<Value> findCurrentCluster(Object recordInCluster);
