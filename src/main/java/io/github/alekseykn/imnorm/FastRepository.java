@@ -1,7 +1,5 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -22,22 +20,18 @@ public final class FastRepository<Record> extends Repository<Record> {
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
-                    tempClusterData.put(recordId.get(now), now);
+                    tempClusterData.put(getStringIdFromRecord.apply(now), now);
                 }
                 data.put(file.getName(), new Cluster<>(tempClusterData));
             }
-        } catch (FileNotFoundException | IllegalAccessException e) {
+        } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
     }
 
     @Override
-    protected synchronized Cluster<Record> findCurrentCluster(Object recordInCluster) {
-        try {
-            return data.floorEntry(String.valueOf(recordId.get(recordInCluster))).getValue();
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e.getMessage());
-        }
+    protected synchronized Cluster<Record> findCurrentCluster(Object id) {
+        return data.floorEntry(String.valueOf(id)).getValue();
     }
 
     @Override
@@ -74,13 +68,7 @@ public final class FastRepository<Record> extends Repository<Record> {
                 startIndex -= clusterRecord.size();
             } else {
                 afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted(Comparator.comparing(record -> {
-                            try {
-                                return String.valueOf(recordId.get(record));
-                            } catch (IllegalAccessException e) {
-                                throw new InternalImnormException(e.getMessage());
-                            }
-                        }))
+                        .sorted(Comparator.comparing(getStringIdFromRecord))
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
