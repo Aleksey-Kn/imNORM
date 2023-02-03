@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public final class FastRepository<Value> extends Repository<Value> {
@@ -16,10 +15,10 @@ public final class FastRepository<Value> extends Repository<Value> {
         super(type, directory);
         Scanner scanner;
         Value now;
-        ConcurrentHashMap<Object, Value> tempClusterData;
+        HashMap<Object, Value> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                tempClusterData = new ConcurrentHashMap<>();
+                tempClusterData = new HashMap<>();
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
@@ -94,10 +93,12 @@ public final class FastRepository<Value> extends Repository<Value> {
                 .filter(e -> e.getValue().isRedacted())
                 .forEach(entry -> {
                     try {
-                        PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
-                        entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
-                        printWriter.close();
-                        entry.getValue().wasFlush();
+                        synchronized (entry.getValue()) {
+                            PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
+                            entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
+                            printWriter.close();
+                            entry.getValue().wasFlush();
+                        }
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     }

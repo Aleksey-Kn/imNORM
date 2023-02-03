@@ -1,13 +1,13 @@
 package io.github.alekseykn.imnorm;
 
 import java.util.Collection;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 
 public final class Cluster<Value> {
     private boolean redacted = false;
-    private final ConcurrentHashMap<Object, Value> data;
+    private final HashMap<Object, Value> data;
 
-    Cluster(ConcurrentHashMap<Object, Value> map) {
+    Cluster(HashMap<Object, Value> map) {
         data = map;
     }
 
