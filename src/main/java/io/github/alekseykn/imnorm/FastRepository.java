@@ -13,10 +13,10 @@ public final class FastRepository<Record> extends Repository<Record> {
         super(type, directory);
         Scanner scanner;
         Record now;
-        TreeMap<Object, Record> tempClusterData;
+        TreeMap<String, Record> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                tempClusterData = new TreeMap<>(Comparator.comparing(String::valueOf));
+                tempClusterData = new TreeMap<>();
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
@@ -41,10 +41,10 @@ public final class FastRepository<Record> extends Repository<Record> {
             //TODO: autogenerate
         }
         if (data.isEmpty() || data.firstKey().compareTo(stringId) < 0) {
-            data.put(stringId, new Cluster<>(id, record));
+            data.put(stringId, new Cluster<>(stringId, record));
         } else {
             Cluster<Record> currentCluster = findCurrentCluster(id);
-            currentCluster.set(id, record);
+            currentCluster.set(stringId, record);
             if(currentCluster.size() * sizeOfEntity > 100_000) {
                 Cluster<Record> newCluster = currentCluster.split();
                 data.put(String.valueOf(currentCluster.firstKey()), newCluster);
@@ -99,3 +99,4 @@ public final class FastRepository<Record> extends Repository<Record> {
                 });
     }
 }
+
