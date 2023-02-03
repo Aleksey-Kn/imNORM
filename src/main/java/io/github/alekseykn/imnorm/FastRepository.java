@@ -93,12 +93,10 @@ public final class FastRepository<Value> extends Repository<Value> {
                 .filter(e -> e.getValue().isRedacted())
                 .forEach(entry -> {
                     try {
-                        synchronized (entry.getValue()) {
                             PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
                             entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
                             printWriter.close();
                             entry.getValue().wasFlush();
-                        }
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     }
