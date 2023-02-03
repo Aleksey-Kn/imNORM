@@ -55,14 +55,14 @@ public abstract class Repository<Value> {
     protected abstract Value create(Object id, Value record);
 
     public Value save(Value record) {
-        Cluster<Value> cluster = findCurrentCluster(record);
-        String key = getStringIdFromRecord.apply(record);
-        if (Objects.nonNull(cluster) && cluster.containsKey(key)) {
-            waitRecordForTransactions(key);
-            cluster.set(key, record);
+        String id = getStringIdFromRecord.apply(record);
+        Cluster<Value> cluster = findCurrentCluster(id);
+        if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
+            waitRecordForTransactions(id);
+            cluster.set(id, record);
             return record;
         } else {
-            return create(key, record);
+            return create(id, record);
         }
     }
 
