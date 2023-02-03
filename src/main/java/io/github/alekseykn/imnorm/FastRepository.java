@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public final class FastRepository<Value> extends Repository<Value> {
@@ -15,10 +16,10 @@ public final class FastRepository<Value> extends Repository<Value> {
         super(type, directory);
         Scanner scanner;
         Value now;
-        HashMap<Object, Value> tempClusterData;
+        ConcurrentHashMap<Object, Value> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                tempClusterData = new HashMap<>();
+                tempClusterData = new ConcurrentHashMap<>();
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
@@ -94,9 +95,9 @@ public final class FastRepository<Value> extends Repository<Value> {
                 .forEach(entry -> {
                     try {
                             PrintWriter printWriter = new PrintWriter(directory.getAbsolutePath() + entry.getKey());
+                            entry.getValue().wasFlush();
                             entry.getValue().findAll().forEach(value -> printWriter.println(gson.toJson(value)));
                             printWriter.close();
-                            entry.getValue().wasFlush();
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     }
