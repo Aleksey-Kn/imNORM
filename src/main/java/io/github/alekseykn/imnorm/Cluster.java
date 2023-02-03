@@ -5,9 +5,9 @@ import java.util.HashMap;
 
 public final class Cluster<Value> {
     private boolean redacted = false;
-    private final HashMap<Object, Value> data;
+    private final ConcurrentHashMap<Object, Value> data;
 
-    Cluster(HashMap<Object, Value> map) {
+    Cluster(ConcurrentHashMap<Object, Value> map) {
         data = map;
     }
 
