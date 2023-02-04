@@ -1,28 +1,29 @@
 package io.github.alekseykn.imnorm;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class Cluster<Record> {
     private boolean redacted = false;
-    private final TreeMap<String, Record> data;
+    private final ConcurrentHashMap<Object, Record> data;
 
-    Cluster(TreeMap<String, Record> map) {
+    Cluster(ConcurrentHashMap<Object, Record> map) {
         data = map;
     }
 
-    Cluster(String id, Record record) {
-        data = new TreeMap<>();
+    Cluster(Object id, Record record) {
+        data = new ConcurrentHashMap<>();
         data.put(id, record);
     }
 
-    void set(String key, Record record) {
+    void set(Object key, Record record) {
         redacted = true;
         data.put(key, record);
     }
 
-    Record get(String key) {
+    Record get(Object key) {
         return data.get(key);
     }
 
@@ -30,7 +31,7 @@ public final class Cluster<Record> {
         return data.values();
     }
 
-    Record delete(String key) {
+    Record delete(Object key) {
         redacted = true;
         return data.remove(key);
     }
@@ -39,12 +40,12 @@ public final class Cluster<Record> {
         return data.size();
     }
 
-    boolean containsKey(String key) {
+    boolean containsKey(Object key) {
         return data.containsKey(key);
     }
 
     Object firstKey() {
-        return data.firstKey();
+        return data.keySet().stream().min(Comparator.comparing(String::valueOf));
     }
 
     boolean isEmpty() {
@@ -56,10 +57,10 @@ public final class Cluster<Record> {
     }
 
     Cluster<Record> split() {
-        TreeMap<String, Record> newClusterData = new TreeMap<>();
+        ConcurrentHashMap<Object, Record> newClusterData = new ConcurrentHashMap<>();
         int counter = 0;
         final int median = data.size() / 2;
-        for(Map.Entry<String, Record> entry: data.entrySet()) {
+        for(Map.Entry<Object, Record> entry: data.entrySet()) {
             if(counter++ > median) {
                 newClusterData.put(entry.getKey(), entry.getValue());
                 data.remove(entry.getKey());
