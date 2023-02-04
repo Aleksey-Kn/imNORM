@@ -67,6 +67,7 @@ public final class FastRepository<Record> extends Repository<Record> {
 
     @Override
     public Set<Record> findAll() {
+        waitAllRecord();
         synchronized (data) {
             return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
         }
@@ -77,6 +78,7 @@ public final class FastRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         List<Collection<Record>> clustersData;
+        waitAllRecord();
         synchronized (data) {
             clustersData = data.values().stream().map(Cluster::findAll).collect(Collectors.toList());
         }
@@ -132,6 +134,7 @@ public final class FastRepository<Record> extends Repository<Record> {
 
     @Override
     public void flush() {
+        waitAllRecord();
         synchronized (data) {
             data.entrySet().parallelStream()
                     .filter(e -> e.getValue().isRedacted())

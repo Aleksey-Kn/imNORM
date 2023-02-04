@@ -34,24 +34,36 @@ public abstract class Repository<Value> {
     }
 
     protected void waitRecordForTransactions(Object id) {
-        int time = 10;
         try {
             while (blockingId.contains(id)) {
-                Thread.sleep(time);
-                time *= 2;
+                synchronized (blockingId) {
+                    blockingId.wait();
+                }
             }
-        } catch (InterruptedException ignored) {
-        }
+        } catch (InterruptedException ignore) {}
     }
 
     protected void waitAllRecord() {
-        int time = 10;
         try {
-            while (blockingId.isEmpty()) {
-                Thread.sleep(time);
-                time *= 2;
+            while (!blockingId.isEmpty()) {
+                synchronized (blockingId) {
+                    blockingId.wait();
+                }
             }
-        } catch (InterruptedException ignored) {
+        } catch (InterruptedException ignore) {}
+    }
+
+    //TODO: waitAllRecord(Transaction)
+
+    protected void lock(Object id) {
+        waitRecordForTransactions(id);
+        blockingId.add(id);
+    }
+
+    protected void unlock(Object id) {
+        blockingId.remove(id);
+        synchronized (blockingId) {
+            blockingId.notifyAll();
         }
     }
 
