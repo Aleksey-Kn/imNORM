@@ -4,7 +4,10 @@ import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -107,10 +110,21 @@ public final class FastRepository<Record> extends Repository<Record> {
     public Record deleteById(Object id) {
         waitRecordForTransactions(id);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
+        Object pastFirstKey = cluster.firstKey();
         Record record = cluster.delete(id);
-        if (cluster.isEmpty()) {
-            synchronized (data) {
-
+        //Check for emptiness inside the synchronized block so that during the check no new entry is added to this cluster
+        synchronized (data) {
+            try {
+                if (cluster.isEmpty()) {
+                    Files.delete(Path.of(directory.getAbsolutePath() + id));
+                    data.remove(String.valueOf(id));
+                } else if (pastFirstKey.equals(id)) {
+                    Files.delete(Path.of(directory.getAbsolutePath() + id));
+                    data.remove(String.valueOf(id));
+                    data.put(String.valueOf(cluster.firstKey()), cluster);
+                }
+            } catch (IOException e) {
+                throw new InternalImnormException(e);
             }
         }
         return record;
