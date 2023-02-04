@@ -4,27 +4,34 @@ import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.annotations.Id;
 import io.github.alekseykn.imnorm.exceptions.CountIdException;
 import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
+import io.github.alekseykn.imnorm.exceptions.IllegalGeneratedIdTypeException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
-public abstract class Repository<Value> {
-    protected final Set<Object> blockingId = ConcurrentHashMap.newKeySet();
+public abstract class Repository<Record> {
+    protected final Set<String> blockingId = ConcurrentHashMap.newKeySet();
     protected final Field recordId;
+    protected final Function<Record, String> getIdFromRecord;
     protected final boolean needGenerateId;
     protected final File directory;
     protected final Gson gson = new Gson();
     protected final int sizeOfEntity;
+    protected long sequence;
 
-    protected Repository(Class<Value> type, File directory) {
+    protected Repository(Class<Record> type, File directory) {
         this.directory = directory;
-        if(!directory.exists()) {
-            if(!directory.mkdir())
+        if (!directory.exists()) {
+            if (!directory.mkdir())
                 throw new CreateDataStorageException(directory);
         }
 
@@ -34,18 +41,52 @@ public abstract class Repository<Value> {
         if (fields.length != 1)
             throw new CountIdException(type);
         recordId = fields[0];
+        getIdFromRecord = record -> {
+            try {
+                return String.valueOf(recordId.get(record));
+            } catch (IllegalAccessException e) {
+                throw new InternalImnormException(e);
+            }
+        };
+        recordId.setAccessible(true);
         needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
         sizeOfEntity = type.getDeclaredFields().length * 50;
+
+        if (needGenerateId) {
+            try (DataInputStream fileInputStream = new DataInputStream(
+                    new FileInputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
+                sequence = fileInputStream.readLong();
+            } catch (IOException e) {
+                sequence = 0;
+            }
+        }
     }
 
-    protected void waitRecordForTransactions(Object id) {
+    protected void generateAndSetIdForRecord(Record record) {
+        try {
+            switch (recordId.getType().getSimpleName()) {
+                case "byte", "Byte" -> recordId.set(record, (byte) sequence++);
+                case "short", "Short" -> recordId.set(record, (short) sequence++);
+                case "int", "Integer" -> recordId.set(record, (int) sequence++);
+                case "long", "Long" -> recordId.set(record, sequence++);
+                default -> recordId.set(record, Long.toString(sequence++));
+            }
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalGeneratedIdTypeException();
+        }
+    }
+
+    protected void waitRecordForTransactions(String id) {
         try {
             while (blockingId.contains(id)) {
                 synchronized (blockingId) {
                     blockingId.wait();
                 }
             }
-        } catch (InterruptedException ignore) {}
+        } catch (InterruptedException ignore) {
+        }
     }
 
     protected void waitAllRecord() {
@@ -55,60 +96,54 @@ public abstract class Repository<Value> {
                     blockingId.wait();
                 }
             }
-        } catch (InterruptedException ignore) {}
+        } catch (InterruptedException ignore) {
+        }
     }
 
     //TODO: waitAllRecord(Transaction)
 
-    protected void lock(Object id) {
+    protected void lock(String id) {
         waitRecordForTransactions(id);
         blockingId.add(id);
     }
 
-    protected void unlock(Object id) {
+    protected void unlock(String id) {
         blockingId.remove(id);
         synchronized (blockingId) {
             blockingId.notifyAll();
         }
     }
 
-    protected abstract Cluster<Value> findCurrentClusterFromId(Object id);
+    protected abstract Cluster<Record> findCurrentClusterFromId(String id);
 
-    protected abstract Value create(Object id, Value record);
+    protected abstract Record create(String id, Record record);
 
-    public Value save(Value record) {
-        try {
-            Object id = recordId.get(record);
-            Cluster<Value> cluster = findCurrentClusterFromId(id);
-            if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
-                waitRecordForTransactions(id);
-                cluster.set(id, record);
-                return record;
-            } else {
-                return create(id, record);
-            }
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e);
+    public Record save(Record record) {
+        String id = getIdFromRecord.apply(record);
+        Cluster<Record> cluster = findCurrentClusterFromId(id);
+        if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
+            waitRecordForTransactions(id);
+            cluster.set(id, record);
+            return record;
+        } else {
+            return create(id, record);
         }
     }
 
-    public Value findById(Object id) {
-        waitRecordForTransactions(id);
-        return findCurrentClusterFromId(id).get(id);
+    public Record findById(Object id) {
+        String realId = String.valueOf(id);
+        waitRecordForTransactions(realId);
+        return findCurrentClusterFromId(realId).get(realId);
     }
 
-    public abstract Set<Value> findAll();
+    public abstract Set<Record> findAll();
 
-    public abstract Set<Value> findAll(int startIndex, int rowCount);
+    public abstract Set<Record> findAll(int startIndex, int rowCount);
 
-    public abstract Value deleteById(Object id);
+    public abstract Record deleteById(Object id);
 
-    public Value delete(Value record) {
-        try {
-            return deleteById(recordId.get(record));
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e);
-        }
+    public Record delete(Record record) {
+        return deleteById(getIdFromRecord.apply(record));
     }
 
     public abstract void flush();
