@@ -41,6 +41,7 @@ public abstract class Repository<Record> {
         if (fields.length != 1)
             throw new CountIdException(type);
         recordId = fields[0];
+        recordId.setAccessible(true);
         getIdFromRecord = record -> {
             try {
                 return String.valueOf(recordId.get(record));
@@ -48,7 +49,6 @@ public abstract class Repository<Record> {
                 throw new InternalImnormException(e);
             }
         };
-        recordId.setAccessible(true);
         needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
         sizeOfEntity = type.getDeclaredFields().length * 50;
 
@@ -62,7 +62,7 @@ public abstract class Repository<Record> {
         }
     }
 
-    protected void generateAndSetIdForRecord(Record record) {
+    protected String generateAndSetIdForRecord(Record record) {
         try {
             switch (recordId.getType().getSimpleName()) {
                 case "byte", "Byte" -> recordId.set(record, (byte) sequence++);
@@ -71,6 +71,7 @@ public abstract class Repository<Record> {
                 case "long", "Long" -> recordId.set(record, sequence++);
                 default -> recordId.set(record, Long.toString(sequence++));
             }
+            return getIdFromRecord.apply(record);
         } catch (IllegalAccessException e) {
             throw new InternalImnormException(e);
         } catch (IllegalArgumentException e) {

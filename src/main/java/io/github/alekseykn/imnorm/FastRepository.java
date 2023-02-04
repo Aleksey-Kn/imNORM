@@ -52,9 +52,9 @@ public final class FastRepository<Record> extends Repository<Record> {
         //there will be no access to the newly created cluster from 'data'
         synchronized (data) {
             if (needGenerateId) {
-                generateAndSetIdForRecord(record);
+                id = generateAndSetIdForRecord(record);
             }
-            if (data.isEmpty() || data.firstKey().compareTo(id) < 0) {
+            if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
                 data.put(id, new Cluster<>(id, record));
             } else {
                 Cluster<Record> currentCluster = findCurrentClusterFromId(id);
