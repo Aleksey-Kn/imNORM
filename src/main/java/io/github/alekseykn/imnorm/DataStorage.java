@@ -1,5 +1,8 @@
 package io.github.alekseykn.imnorm;
 
+import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
+
+import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -7,8 +10,18 @@ import java.util.Map;
 public class DataStorage {
     private static final Map<Path, DataStorage> createdDataStorage = new HashMap<>();
 
+    public static DataStorage getDataStorage() {
+        return getDataStorage(Path.of("data"));
+    }
+
     public static DataStorage getDataStorage(Path path) {
         path = path.toAbsolutePath();
+        File rootDataStorageDirectory = path.toFile();
+        if(!rootDataStorageDirectory.exists()) {
+            if(!rootDataStorageDirectory.mkdir())
+                throw new CreateDataStorageException(rootDataStorageDirectory);
+        }
+
         if(!createdDataStorage.containsKey(path)) {
             createdDataStorage.put(path, new DataStorage(path));
         }

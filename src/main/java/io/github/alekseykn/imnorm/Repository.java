@@ -3,6 +3,7 @@ package io.github.alekseykn.imnorm;
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.annotations.Id;
 import io.github.alekseykn.imnorm.exceptions.CountIdException;
+import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.File;
@@ -22,6 +23,10 @@ public abstract class Repository<Value> {
 
     protected Repository(Class<Value> type, File directory) {
         this.directory = directory;
+        if(!directory.exists()) {
+            if(!directory.mkdir())
+                throw new CreateDataStorageException(directory);
+        }
 
         Field[] fields = Arrays.stream(type.getDeclaredFields())
                 .filter(field -> Objects.nonNull(field.getAnnotation(Id.class)))
