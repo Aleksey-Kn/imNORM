@@ -108,11 +108,16 @@ public abstract class Repository<Record> {
         blockingId.add(id);
     }
 
-    protected void unlock(String id) {
-        blockingId.remove(id);
+    protected void unlock(Set<String> identities) {
+        blockingId.removeAll(identities);
         synchronized (blockingId) {
             blockingId.notifyAll();
         }
+    }
+    
+    protected void rollback(Map<String, Object> rollbackRecord) {
+        rollbackRecord.forEach((id, record) -> findCurrentCluster(id).set(id, (Value) record));
+        unlock(rollbackRecord.keySet());
     }
 
     protected abstract Cluster<Record> findCurrentClusterFromId(String id);
