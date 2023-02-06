@@ -26,6 +26,7 @@ public final class FastRepository<Record> extends Repository<Record> {
                         tempClusterData.put(getIdFromRecord.apply(now), now);
                     }
                     data.put(file.getName(), new Cluster<>(tempClusterData));
+                    scanner.close();
                 }
             }
         } catch (FileNotFoundException e) {
@@ -110,10 +111,10 @@ public final class FastRepository<Record> extends Repository<Record> {
             Record record = cluster.delete(realId);
             try {
                 if (cluster.isEmpty()) {
-                    Files.delete(Path.of(directory.getAbsolutePath() + realId));
+                    Files.delete(Path.of(directory.getAbsolutePath(), realId));
                     data.remove(realId);
                 } else if (pastFirstKey.equals(realId)) {
-                    Files.delete(Path.of(directory.getAbsolutePath() + realId));
+                    Files.delete(Path.of(directory.getAbsolutePath(), realId));
                     data.remove(realId);
                     data.put(cluster.firstKey(), cluster);
                 }

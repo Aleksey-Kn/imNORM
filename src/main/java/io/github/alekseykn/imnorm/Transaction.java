@@ -1,5 +1,7 @@
 package io.github.alekseykn.imnorm;
 
+import io.github.alekseykn.imnorm.exceptions.TransactionWasCloseException;
+
 import java.util.HashMap;
 import java.util.Map;
 
