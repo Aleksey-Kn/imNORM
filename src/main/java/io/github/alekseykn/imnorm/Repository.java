@@ -126,7 +126,9 @@ public abstract class Repository<Record> {
     }
     
     protected void rollback(Map<String, Object> rollbackRecord) {
-        rollbackRecord.forEach((id, record) -> findCurrentClusterFromId(id).set(id, (Record) record));
+        synchronized (this) {
+            rollbackRecord.forEach((id, record) -> findCurrentClusterFromId(id).set(id, (Record) record));
+        }
         unlock(rollbackRecord.keySet());
     }
 
