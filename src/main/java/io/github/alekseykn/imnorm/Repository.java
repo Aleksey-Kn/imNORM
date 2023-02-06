@@ -12,9 +12,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -27,9 +25,12 @@ public abstract class Repository<Record> {
     protected final Gson gson = new Gson();
     protected final int sizeOfEntity;
     protected long sequence;
+    protected Class<Record> type;
 
     protected Repository(Class<Record> type, File directory) {
         this.directory = directory;
+        this.type = type;
+
         if (!directory.exists()) {
             if (!directory.mkdir())
                 throw new CreateDataStorageException(directory);
@@ -79,7 +80,7 @@ public abstract class Repository<Record> {
         }
     }
 
-    protected void waitRecordForTransactions(String id) {
+    protected void waitRecord(String id) {
         try {
             while (blockingId.contains(id)) {
                 synchronized (blockingId) {
@@ -90,7 +91,7 @@ public abstract class Repository<Record> {
         }
     }
 
-    protected void waitAllRecord() {
+    protected void waitAllRecords() {
         try {
             while (!blockingId.isEmpty()) {
                 synchronized (blockingId) {
@@ -101,10 +102,19 @@ public abstract class Repository<Record> {
         }
     }
 
-    //TODO: waitAllRecord(Transaction)
+    protected void waitRecords(Collection<String> identity) {
+        try {
+            while (blockingId.stream().anyMatch(identity::contains)) {
+                synchronized (blockingId) {
+                    blockingId.wait();
+                }
+            }
+        } catch (InterruptedException ignored) {
+        }
+    }
 
     protected void lock(String id) {
-        waitRecordForTransactions(id);
+        waitRecord(id);
         blockingId.add(id);
     }
 
@@ -116,7 +126,7 @@ public abstract class Repository<Record> {
     }
     
     protected void rollback(Map<String, Object> rollbackRecord) {
-        rollbackRecord.forEach((id, record) -> findCurrentCluster(id).set(id, (Value) record));
+        rollbackRecord.forEach((id, record) -> findCurrentClusterFromId(id).set(id, (Record) record));
         unlock(rollbackRecord.keySet());
     }
 
@@ -128,8 +138,10 @@ public abstract class Repository<Record> {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
-            waitRecordForTransactions(id);
-            cluster.set(id, record);
+            waitRecord(id);
+            synchronized (this) {
+                cluster.set(id, record);
+            }
             return record;
         } else {
             return create(id, record);
@@ -138,8 +150,10 @@ public abstract class Repository<Record> {
 
     public Record findById(Object id) {
         String realId = String.valueOf(id);
-        waitRecordForTransactions(realId);
-        return findCurrentClusterFromId(realId).get(realId);
+        waitRecord(realId);
+        synchronized (this) {
+            return findCurrentClusterFromId(realId).get(realId);
+        }
     }
 
     public abstract Set<Record> findAll();

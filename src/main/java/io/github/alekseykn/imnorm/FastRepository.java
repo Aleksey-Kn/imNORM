@@ -6,7 +6,6 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public final class FastRepository<Record> extends Repository<Record> {
@@ -16,11 +15,11 @@ public final class FastRepository<Record> extends Repository<Record> {
         super(type, directory);
         Scanner scanner;
         Record now;
-        ConcurrentHashMap<String, Record> tempClusterData;
+        TreeMap<String, Record> tempClusterData;
         try {
             for (File file : Objects.requireNonNull(directory.listFiles())) {
-                if(!file.getName().equals("_sequence.imnorm")) {
-                    tempClusterData = new ConcurrentHashMap<>();
+                if (!file.getName().equals("_sequence.imnorm")) {
+                    tempClusterData = new TreeMap<>();
                     scanner = new Scanner(file);
                     while (scanner.hasNextLine()) {
                         now = gson.fromJson(scanner.nextLine(), type);
@@ -35,35 +34,29 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected Cluster<Record> findCurrentClusterFromId(String id) {
-        synchronized (data) {
-            Map.Entry<String, Cluster<Record>> entry = data.floorEntry(id);
-            if(Objects.isNull(entry)) {
-                return null;
-            } else {
-                return entry.getValue();
-            }
+    protected synchronized Cluster<Record> findCurrentClusterFromId(String id) {
+        Map.Entry<String, Cluster<Record>> entry = data.floorEntry(id);
+        if (Objects.isNull(entry)) {
+            return null;
+        } else {
+            return entry.getValue();
         }
     }
 
     @Override
-    protected Record create(String id, Record record) {
-        //blocking on 'data', because in the process of disbanding the cluster,
-        //there will be no access to the newly created cluster from 'data'
-        synchronized (data) {
-            if (needGenerateId) {
-                id = generateAndSetIdForRecord(record);
-            }
-            if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
-                data.put(id, new Cluster<>(id, record));
-            } else {
-                Cluster<Record> currentCluster = findCurrentClusterFromId(id);
-                assert currentCluster != null;
-                currentCluster.set(id, record);
-                if (currentCluster.size() * sizeOfEntity > 100_000) {
-                    Cluster<Record> newCluster = currentCluster.split();
-                    data.put(currentCluster.firstKey(), newCluster);
-                }
+    protected synchronized Record create(String id, Record record) {
+        if (needGenerateId) {
+            id = generateAndSetIdForRecord(record);
+        }
+        if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
+            data.put(id, new Cluster<>(id, record));
+        } else {
+            Cluster<Record> currentCluster = findCurrentClusterFromId(id);
+            assert currentCluster != null;
+            currentCluster.set(id, record);
+            if (currentCluster.size() * sizeOfEntity > 100_000) {
+                Cluster<Record> newCluster = currentCluster.split();
+                data.put(currentCluster.firstKey(), newCluster);
             }
         }
         return record;
@@ -71,8 +64,8 @@ public final class FastRepository<Record> extends Repository<Record> {
 
     @Override
     public Set<Record> findAll() {
-        waitAllRecord();
-        synchronized (data) {
+        waitAllRecords();
+        synchronized (this) {
             return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
         }
     }
@@ -82,8 +75,7 @@ public final class FastRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         List<Collection<Record>> clustersData;
-        waitAllRecord();
-        synchronized (data) {
+        synchronized (this) {
             clustersData = data.values().stream().map(Cluster::findAll).collect(Collectors.toList());
         }
         for (Collection<Record> clusterRecord : clustersData) {
@@ -95,6 +87,7 @@ public final class FastRepository<Record> extends Repository<Record> {
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
+                waitRecords(afterSkippedClusterValues.parallelStream().map(getIdFromRecord).collect(Collectors.toSet()));
                 result.addAll(afterSkippedClusterValues);
 
                 rowCount -= afterSkippedClusterValues.size();
@@ -109,13 +102,12 @@ public final class FastRepository<Record> extends Repository<Record> {
     @Override
     public Record deleteById(Object id) {
         String realId = String.valueOf(id);
-        waitRecordForTransactions(realId);
-        Cluster<Record> cluster = findCurrentClusterFromId(realId);
-        assert cluster != null;
-        String pastFirstKey = cluster.firstKey();
-        Record record = cluster.delete(realId);
-        //Check for emptiness inside the synchronized block so that during the check no new entry is added to this cluster
-        synchronized (data) {
+        waitRecord(realId);
+        synchronized (this) {
+            Cluster<Record> cluster = findCurrentClusterFromId(realId);
+            assert cluster != null;
+            String pastFirstKey = cluster.firstKey();
+            Record record = cluster.delete(realId);
             try {
                 if (cluster.isEmpty()) {
                     Files.delete(Path.of(directory.getAbsolutePath() + realId));
@@ -126,37 +118,25 @@ public final class FastRepository<Record> extends Repository<Record> {
                     data.put(cluster.firstKey(), cluster);
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new InternalImnormException(e);
             }
+            return record;
         }
-        return record;
     }
 
     @Override
     public void flush() {
-        waitAllRecord();
-        synchronized (data) {
-            if(needGenerateId) {
-                try(DataOutputStream outputStream = new DataOutputStream(
+        waitAllRecords();
+        synchronized (this) {
+            if (needGenerateId) {
+                try (DataOutputStream outputStream = new DataOutputStream(
                         new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
                     outputStream.writeLong(sequence);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
-            data.entrySet().parallelStream()
-                    .filter(e -> e.getValue().isRedacted())
-                    .forEach(entry -> {
-                        try {
-                            PrintWriter printWriter =
-                                    new PrintWriter(new File(directory.getAbsolutePath(), entry.getKey()));
-                            entry.getValue().findAll().forEach(record -> printWriter.println(gson.toJson(record)));
-                            entry.getValue().wasFlush();
-                            printWriter.close();
-                        } catch (FileNotFoundException e) {
-                            e.printStackTrace();
-                        }
-                    });
+            data.forEach((id, cluster) -> cluster.flush(new File(directory.getAbsolutePath(), String.valueOf(id)), gson));
         }
     }
 }

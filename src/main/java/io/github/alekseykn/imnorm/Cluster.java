@@ -1,20 +1,25 @@
 package io.github.alekseykn.imnorm;
 
+import com.google.gson.Gson;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
+import java.util.TreeMap;
 
 public final class Cluster<Record> {
     private boolean redacted = true;
-    private final ConcurrentHashMap<String, Record> data;
+    private final TreeMap<String, Record> data;
 
-    Cluster(ConcurrentHashMap<String, Record> map) {
+    Cluster(TreeMap<String, Record> map) {
         data = map;
     }
 
     Cluster(String id, Record record) {
-        data = new ConcurrentHashMap<>();
+        data = new TreeMap<>();
         data.put(id, record);
     }
 
@@ -45,19 +50,19 @@ public final class Cluster<Record> {
     }
 
     String firstKey() {
-        return data.keySet().stream().min(Comparator.comparing(s -> s)).orElseThrow();
+        return data.firstKey();
+    }
+
+    Set<String> allKeys() {
+        return data.keySet();
     }
 
     boolean isEmpty() {
-        return size() == 0;
-    }
-
-    boolean isRedacted() {
-        return redacted;
+        return data.isEmpty();
     }
 
     Cluster<Record> split() {
-        ConcurrentHashMap<String, Record> newClusterData = new ConcurrentHashMap<>();
+        TreeMap<String, Record> newClusterData = new TreeMap<>();
         int counter = 0;
         final int median = data.size() / 2;
         for(Map.Entry<String, Record> entry: data.entrySet()) {
@@ -66,10 +71,19 @@ public final class Cluster<Record> {
                 data.remove(entry.getKey());
             }
         }
-        return new Cluster<>(newClusterData);
+        Cluster<Record> newCluster = new Cluster<>(newClusterData);
+        newCluster.redacted = redacted;
+        return newCluster;
     }
 
-    void wasFlush() {
-        redacted = false;
+    void flush(File toFile, Gson parser) {
+        if (redacted) {
+            try (PrintWriter printWriter = new PrintWriter(toFile)) {
+                findAll().forEach(record -> printWriter.println(parser.toJson(record)));
+                redacted = false;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
