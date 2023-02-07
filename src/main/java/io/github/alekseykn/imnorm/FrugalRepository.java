@@ -55,7 +55,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             cluster.flush(new File(directory.getAbsolutePath(), id), gson);
             clusterNames.add(id);
         } else {
-            Cluster<Record> currentCluster = findCurrentCluster(id);
+            Cluster<Record> currentCluster = findCurrentClusterFromId(id);
             assert currentCluster != null;
             currentCluster.set(id, record);
             if(currentCluster.size() * sizeOfEntity > 100_000) {

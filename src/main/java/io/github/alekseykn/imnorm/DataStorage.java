@@ -6,6 +6,8 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiFunction;
 
 public class DataStorage {
     private static final Map<Path, DataStorage> createdDataStorage = new HashMap<>();
