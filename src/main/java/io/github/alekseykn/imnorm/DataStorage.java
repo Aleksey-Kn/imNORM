@@ -36,12 +36,39 @@ public class DataStorage {
         nowPath = path;
     }
 
-    public <Value> Repository<Value> getFastRepositoryForClass(Class<Value> clas) {
-        if(!createdRepository.containsKey(clas)) {
-            createdRepository.put(clas,
-                    new FastRepository<>(clas,
-                            Path.of(nowPath.toString(), clas.getName().replace('.', '_')).toFile()));
+    private <Value> Repository<Value> getRepository(Class<Value> clas,
+                                                    BiFunction<Class<Value>, File, Repository<Value>> constructor) {
+        if (!createdRepository.containsKey(clas)) {
+            createdRepository.put(clas, constructor.apply(clas, directoryForRepository(clas)));
         }
         return (Repository<Value>) createdRepository.get(clas);
+    }
+
+    public <Value> Repository<Value> getFastRepositoryForClass(Class<Value> clas) {
+        return getRepository(clas, FastRepository::new);
+    }
+
+    public <Value> Repository<Value> getFrugalRepositoryForClass(Class<Value> clas) {
+        return getRepository(clas, FrugalRepository::new);
+    }
+
+    public <Value> Repository<Value> getRepositoryForClass(Class<Value> clas) {
+        File repositoryDirectory = directoryForRepository(clas);
+        if (repositoryDirectory.exists()) {
+            return (Runtime.getRuntime().maxMemory() - usedMemory()) / 2 >
+                    Objects.requireNonNull(repositoryDirectory.list()).length * 100_000L
+                    ? getFastRepositoryForClass(clas)
+                    : getFrugalRepositoryForClass(clas);
+        } else {
+            return getFastRepositoryForClass(clas);
+        }
+    }
+
+    private File directoryForRepository(Class<?> forClass) {
+        return Path.of(nowPath.toString(), forClass.getName().replace('.', '_')).toFile();
+    }
+
+    private long usedMemory() {
+        return Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
     }
 }
