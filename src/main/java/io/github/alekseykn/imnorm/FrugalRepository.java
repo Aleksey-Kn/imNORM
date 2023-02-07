@@ -46,9 +46,26 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected Record create(String id, Record record) {
-        //todo
-        return null;
+    protected synchronized Record create(String id, Record record) {
+        if(needGenerateId) {
+            id = generateAndSetIdForRecord(record);
+        }
+        if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
+            Cluster<Record> cluster = new Cluster<>(id, record);
+            cluster.flush(new File(directory.getAbsolutePath(), id), gson);
+            clusterNames.add(id);
+        } else {
+            Cluster<Record> currentCluster = findCurrentCluster(id);
+            assert currentCluster != null;
+            currentCluster.set(id, record);
+            if(currentCluster.size() * sizeOfEntity > 100_000) {
+                Cluster<Record> newCluster = currentCluster.split();
+                String firstKeyNewCluster = newCluster.firstKey();
+                newCluster.flush(new File(directory.getAbsolutePath(), firstKeyNewCluster), gson);
+                clusterNames.add(firstKeyNewCluster);
+            }
+        }
+        return record;
     }
 
     @Override
