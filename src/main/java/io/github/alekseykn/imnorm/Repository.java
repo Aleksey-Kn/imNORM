@@ -58,7 +58,7 @@ public abstract class Repository<Record> {
                     new FileInputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
                 sequence = fileInputStream.readLong();
             } catch (IOException e) {
-                sequence = 0;
+                sequence = 1;
             }
         }
     }
