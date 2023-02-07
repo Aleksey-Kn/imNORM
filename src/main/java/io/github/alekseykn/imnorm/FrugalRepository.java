@@ -122,8 +122,29 @@ public final class FrugalRepository<Record> extends Repository<Record> {
 
     @Override
     public Record deleteById(Object id) {
-        //todo
-        return null;
+        String realId = String.valueOf(id);
+        waitRecord(realId);
+        synchronized (this) {
+            Cluster<Record> cluster = findCurrentClusterFromId(realId);
+            if(Objects.isNull(cluster)) {
+                return null;
+            }
+            String pastFirstKey = cluster.firstKey();
+            Record record = cluster.delete(realId);
+            try {
+                if (cluster.isEmpty()) {
+                    Files.delete(Path.of(directory.getAbsolutePath(), realId));
+                    clusterNames.remove(realId);
+                } else if (pastFirstKey.equals(realId)) {
+                    Files.delete(Path.of(directory.getAbsolutePath(), realId));
+                    clusterNames.remove(realId);
+                    clusterNames.add(cluster.firstKey());
+                }
+            } catch (IOException e) {
+                throw new InternalImnormException(e);
+            }
+            return record;
+        }
     }
 
     @Override
