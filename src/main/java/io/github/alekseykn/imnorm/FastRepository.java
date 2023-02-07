@@ -106,7 +106,9 @@ public final class FastRepository<Record> extends Repository<Record> {
         waitRecord(realId);
         synchronized (this) {
             Cluster<Record> cluster = findCurrentClusterFromId(realId);
-            assert cluster != null;
+            if(Objects.isNull(cluster)) {
+                return null;
+            }
             String pastFirstKey = cluster.firstKey();
             Record record = cluster.delete(realId);
             try {
