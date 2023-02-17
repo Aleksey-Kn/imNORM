@@ -43,11 +43,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                     tempClusterData.put(getIdFromRecord.apply(now), now);
                 }
                 openClusters.put(clusterId, new Cluster<>(tempClusterData));
-                if (openClusters.size() > maxClusterCount) {
-                    Iterator<Map.Entry<String, Cluster<Record>>> it = openClusters.entrySet().iterator();
-                    it.next();
-                    it.remove();
-                }
+                checkAndDrop();
                 return openClusters.get(clusterId);
             } catch (FileNotFoundException e) {
                 throw new InternalImnormException(e);
@@ -62,7 +58,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         }
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
             Cluster<Record> cluster = new Cluster<>(id, record);
-            cluster.flush(new File(directory.getAbsolutePath(), id), gson);
+            openClusters.put(id, cluster);
             clusterNames.add(id);
         } else {
             Cluster<Record> currentCluster = findCurrentClusterFromId(id);
@@ -71,10 +67,11 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             if (currentCluster.size() * sizeOfEntity > 100_000) {
                 Cluster<Record> newCluster = currentCluster.split();
                 String firstKeyNewCluster = newCluster.firstKey();
-                newCluster.flush(new File(directory.getAbsolutePath(), firstKeyNewCluster), gson);
+                openClusters.put(firstKeyNewCluster, newCluster);
                 clusterNames.add(firstKeyNewCluster);
             }
         }
+        checkAndDrop();
         return record;
     }
 
@@ -144,10 +141,12 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 if (cluster.isEmpty()) {
                     Files.delete(Path.of(directory.getAbsolutePath(), realId));
                     clusterNames.remove(realId);
+                    openClusters.remove(realId);
                 } else if (pastFirstKey.equals(realId)) {
                     Files.delete(Path.of(directory.getAbsolutePath(), realId));
                     clusterNames.remove(realId);
                     clusterNames.add(cluster.firstKey());
+                    openClusters.put(cluster.firstKey(), openClusters.remove(realId));
                 }
             } catch (IOException e) {
                 throw new InternalImnormException(e);
@@ -172,6 +171,15 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
             }
             openClusters.clear();
+        }
+    }
+
+    private void checkAndDrop() {
+        if (openClusters.size() > maxClusterCount) {
+            Iterator<Map.Entry<String, Cluster<Record>>> it = openClusters.entrySet().iterator();
+            Map.Entry<String, Cluster<Record>> entry = it.next();
+            entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
+            it.remove();
         }
     }
 }
