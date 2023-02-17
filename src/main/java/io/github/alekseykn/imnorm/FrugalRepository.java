@@ -32,20 +32,19 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         if (openClusters.containsKey(clusterId)) {
             return openClusters.get(clusterId);
         } else {
-            Record now;
             if (Objects.isNull(clusterId)) {
                 return null;
             }
-            try (Scanner scanner = new Scanner(new File(directory.getAbsolutePath(), clusterId))) {
+            try {
                 TreeMap<String, Record> tempClusterData = new TreeMap<>();
-                while (scanner.hasNextLine()) {
-                    now = gson.fromJson(scanner.nextLine(), type);
+                Files.lines(Path.of(directory.getAbsolutePath(), clusterId)).forEach(line -> {
+                    Record now = gson.fromJson(line, type);
                     tempClusterData.put(getIdFromRecord.apply(now), now);
-                }
+                });
                 openClusters.put(clusterId, new Cluster<>(tempClusterData));
                 checkAndDrop();
                 return openClusters.get(clusterId);
-            } catch (FileNotFoundException e) {
+            } catch (IOException e) {
                 throw new InternalImnormException(e);
             }
         }
