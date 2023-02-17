@@ -102,17 +102,6 @@ public abstract class Repository<Record> {
         }
     }
 
-    protected void waitRecords(Collection<String> identity) {
-        try {
-            while (blockingId.stream().anyMatch(identity::contains)) {
-                synchronized (blockingId) {
-                    blockingId.wait();
-                }
-            }
-        } catch (InterruptedException ignored) {
-        }
-    }
-
     protected void lock(String id) {
         waitRecord(id);
         blockingId.add(id);

@@ -16,33 +16,39 @@ import java.util.stream.Stream;
  */
 public final class FrugalRepository<Record> extends Repository<Record> {
     private final TreeSet<String> clusterNames = new TreeSet<>();
-    private Cluster<Record> openCluster;
-    private String openClusterName;
+    private final LinkedHashMap<String, Cluster<Record>> openClusters;
+    private final int maxClusterCount;
 
-    FrugalRepository(Class<Record> type, File directory) {
+    FrugalRepository(Class<Record> type, File directory, int maxClusterCount) {
         super(type, directory);
+        this.maxClusterCount = maxClusterCount;
+        assert maxClusterCount > 1;
+        openClusters = new LinkedHashMap<>(maxClusterCount + 1);
     }
 
     @Override
     protected synchronized Cluster<Record> findCurrentClusterFromId(String id) {
-        if (Objects.nonNull(openCluster) && openClusterName.equals(clusterNames.floor(id))) {
-            return openCluster;
+        String clusterId = clusterNames.floor(id);
+        if (openClusters.containsKey(clusterId)) {
+            return openClusters.get(clusterId);
         } else {
             Record now;
-            flush();
-            openClusterName = clusterNames.floor(id);
-            if(Objects.isNull(openClusterName)) {
-                openCluster = null;
+            if (Objects.isNull(clusterId)) {
                 return null;
             }
-            try (Scanner scanner = new Scanner(new File(directory.getAbsolutePath(), openClusterName))) {
+            try (Scanner scanner = new Scanner(new File(directory.getAbsolutePath(), clusterId))) {
                 TreeMap<String, Record> tempClusterData = new TreeMap<>();
                 while (scanner.hasNextLine()) {
                     now = gson.fromJson(scanner.nextLine(), type);
                     tempClusterData.put(getIdFromRecord.apply(now), now);
                 }
-                openCluster = new Cluster<>(tempClusterData);
-                return openCluster;
+                openClusters.put(clusterId, new Cluster<>(tempClusterData));
+                if (openClusters.size() > maxClusterCount) {
+                    Iterator<Map.Entry<String, Cluster<Record>>> it = openClusters.entrySet().iterator();
+                    it.next();
+                    it.remove();
+                }
+                return openClusters.get(clusterId);
             } catch (FileNotFoundException e) {
                 throw new InternalImnormException(e);
             }
@@ -51,7 +57,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
 
     @Override
     protected synchronized Record create(String id, Record record) {
-        if(needGenerateId) {
+        if (needGenerateId) {
             id = generateAndSetIdForRecord(record);
         }
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
@@ -62,7 +68,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             Cluster<Record> currentCluster = findCurrentClusterFromId(id);
             assert currentCluster != null;
             currentCluster.set(id, record);
-            if(currentCluster.size() * sizeOfEntity > 100_000) {
+            if (currentCluster.size() * sizeOfEntity > 100_000) {
                 Cluster<Record> newCluster = currentCluster.split();
                 String firstKeyNewCluster = newCluster.firstKey();
                 newCluster.flush(new File(directory.getAbsolutePath(), firstKeyNewCluster), gson);
@@ -94,6 +100,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         Stream<Record> clusterRecords;
+        waitAllRecords();
         try {
             synchronized (this) {
                 for (String clusterName : clusterNames) {
@@ -107,8 +114,6 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                                 .skip(startIndex)
                                 .limit(rowCount)
                                 .collect(Collectors.toList());
-                        waitRecords(afterSkippedClusterValues.parallelStream()
-                                .map(getIdFromRecord).collect(Collectors.toSet()));
                         result.addAll(afterSkippedClusterValues);
 
                         rowCount -= afterSkippedClusterValues.size();
@@ -130,7 +135,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         waitRecord(realId);
         synchronized (this) {
             Cluster<Record> cluster = findCurrentClusterFromId(realId);
-            if(Objects.isNull(cluster)) {
+            if (Objects.isNull(cluster)) {
                 return null;
             }
             String pastFirstKey = cluster.firstKey();
@@ -152,10 +157,10 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    public synchronized void flush() {
-        if(Objects.nonNull(openCluster)) {
-            waitRecords(openCluster.allKeys());
-            synchronized (clusterNames) {
+    public void flush() {
+        waitAllRecords();
+        synchronized (this) {
+            for (Map.Entry<String, Cluster<Record>> entry : openClusters.entrySet()) {
                 if (needGenerateId) {
                     try (DataOutputStream outputStream = new DataOutputStream(
                             new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
@@ -164,8 +169,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                         e.printStackTrace();
                     }
                 }
-                openCluster.flush(new File(directory.getAbsolutePath(), openClusterName), gson);
+                entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
             }
+            openClusters.clear();
         }
     }
 }

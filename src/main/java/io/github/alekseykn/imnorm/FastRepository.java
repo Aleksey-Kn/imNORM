@@ -76,6 +76,7 @@ public final class FastRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         List<Collection<Record>> clustersData;
+        waitAllRecords();
         synchronized (this) {
             clustersData = data.values().stream().map(Cluster::findAll).collect(Collectors.toList());
         }
@@ -88,7 +89,6 @@ public final class FastRepository<Record> extends Repository<Record> {
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
-                waitRecords(afterSkippedClusterValues.parallelStream().map(getIdFromRecord).collect(Collectors.toSet()));
                 result.addAll(afterSkippedClusterValues);
 
                 rowCount -= afterSkippedClusterValues.size();
