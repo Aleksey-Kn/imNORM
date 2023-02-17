@@ -25,12 +25,16 @@ public final class FrugalRepository<Record> extends Repository<Record> {
 
     @Override
     protected synchronized Cluster<Record> findCurrentClusterFromId(String id) {
-        if (Objects.nonNull(openCluster) && openCluster.containsKey(id)) {
+        if (Objects.nonNull(openCluster) && openClusterName.equals(clusterNames.floor(id))) {
             return openCluster;
         } else {
             Record now;
             flush();
             openClusterName = clusterNames.floor(id);
+            if(Objects.isNull(openClusterName)) {
+                openCluster = null;
+                return null;
+            }
             try (Scanner scanner = new Scanner(new File(directory.getAbsolutePath(), openClusterName))) {
                 TreeMap<String, Record> tempClusterData = new TreeMap<>();
                 while (scanner.hasNextLine()) {
@@ -40,7 +44,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 openCluster = new Cluster<>(tempClusterData);
                 return openCluster;
             } catch (FileNotFoundException e) {
-                return null;
+                throw new InternalImnormException(e);
             }
         }
     }
@@ -149,17 +153,19 @@ public final class FrugalRepository<Record> extends Repository<Record> {
 
     @Override
     public synchronized void flush() {
-        waitRecords(openCluster.allKeys());
-        synchronized (clusterNames) {
-            if (needGenerateId) {
-                try (DataOutputStream outputStream = new DataOutputStream(
-                        new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
-                    outputStream.writeLong(sequence);
-                } catch (IOException e) {
-                    e.printStackTrace();
+        if(Objects.nonNull(openCluster)) {
+            waitRecords(openCluster.allKeys());
+            synchronized (clusterNames) {
+                if (needGenerateId) {
+                    try (DataOutputStream outputStream = new DataOutputStream(
+                            new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
+                        outputStream.writeLong(sequence);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
+                openCluster.flush(new File(directory.getAbsolutePath(), openClusterName), gson);
             }
-            openCluster.flush(new File(directory.getAbsolutePath(), openClusterName), gson);
         }
     }
 }
