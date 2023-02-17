@@ -57,7 +57,7 @@ public class DataStorage {
         File repositoryDirectory = directoryForRepository(clas);
         if (repositoryDirectory.exists()) {
             return getFrugalRepositoryForClass(clas,
-                    (int) ((Runtime.getRuntime().maxMemory() - usedMemory()) / 1_048_576));
+                    (int) ((Runtime.getRuntime().maxMemory() - usedMemory()) / 2_097_152));
         } else {
             return getFastRepositoryForClass(clas);
         }
