@@ -65,15 +65,16 @@ public final class Cluster<Record> {
         TreeMap<String, Record> newClusterData = new TreeMap<>();
         int counter = 0;
         final int median = data.size() / 2;
-        for(Map.Entry<String, Record> entry: data.entrySet()) {
+        Iterator<Map.Entry<String, Record>> it = data.entrySet().iterator();
+        Map.Entry<String, Record> entry;
+        while (it.hasNext()) {
+            entry = it.next();
             if(counter++ > median) {
                 newClusterData.put(entry.getKey(), entry.getValue());
-                data.remove(entry.getKey());
+                it.remove();
             }
         }
-        Cluster<Record> newCluster = new Cluster<>(newClusterData);
-        newCluster.redacted = redacted;
-        return newCluster;
+        return new Cluster<>(newClusterData);
     }
 
     void flush(File toFile, Gson parser) {
