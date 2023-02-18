@@ -17,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public abstract class Repository<Record> {
+    protected static final int CLUSTER_MAX_SIZE = 10_000;
+
     protected final Set<String> blockingId = ConcurrentHashMap.newKeySet();
     protected final Field recordId;
     protected final Function<Record, String> getIdFromRecord;

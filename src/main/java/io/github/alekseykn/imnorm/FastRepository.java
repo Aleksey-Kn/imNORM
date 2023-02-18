@@ -55,7 +55,7 @@ public final class FastRepository<Record> extends Repository<Record> {
             Cluster<Record> currentCluster = findCurrentClusterFromId(id);
             assert currentCluster != null;
             currentCluster.set(id, record);
-            if (currentCluster.size() * sizeOfEntity > 100_000) {
+            if (currentCluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
                 Cluster<Record> newCluster = currentCluster.split();
                 data.put(currentCluster.firstKey(), newCluster);
             }

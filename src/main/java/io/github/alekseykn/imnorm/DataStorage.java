@@ -48,7 +48,7 @@ public class DataStorage {
     public <Value> Repository<Value> getFrugalRepositoryForClass(Class<Value> clas, int repositoryMaxMegabyteSize) {
         if (!createdRepository.containsKey(clas)) {
             createdRepository.put(clas, new FrugalRepository<>(clas, directoryForRepository(clas),
-                    repositoryMaxMegabyteSize * 10));
+                    repositoryMaxMegabyteSize * 100));
         }
         return (Repository<Value>) createdRepository.get(clas);
     }
