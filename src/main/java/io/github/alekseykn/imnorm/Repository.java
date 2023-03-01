@@ -82,47 +82,6 @@ public abstract class Repository<Record> {
         }
     }
 
-    protected void waitRecord(String id) {
-        try {
-            while (blockingId.contains(id)) {
-                synchronized (blockingId) {
-                    blockingId.wait();
-                }
-            }
-        } catch (InterruptedException ignore) {
-        }
-    }
-
-    protected void waitAllRecords() {
-        try {
-            while (!blockingId.isEmpty()) {
-                synchronized (blockingId) {
-                    blockingId.wait();
-                }
-            }
-        } catch (InterruptedException ignore) {
-        }
-    }
-
-    protected void lock(String id) {
-        waitRecord(id);
-        blockingId.add(id);
-    }
-
-    protected void unlock(Set<String> identities) {
-        blockingId.removeAll(identities);
-        synchronized (blockingId) {
-            blockingId.notifyAll();
-        }
-    }
-    
-    protected void rollback(Map<String, Object> rollbackRecord) {
-        synchronized (this) {
-            rollbackRecord.forEach((id, record) -> findCurrentClusterFromId(id).set(id, (Record) record));
-        }
-        unlock(rollbackRecord.keySet());
-    }
-
     protected abstract Cluster<Record> findCurrentClusterFromId(String id);
 
     protected abstract Record create(String id, Record record);
@@ -131,7 +90,6 @@ public abstract class Repository<Record> {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
-            waitRecord(id);
             synchronized (this) {
                 cluster.set(id, record);
             }
@@ -143,7 +101,6 @@ public abstract class Repository<Record> {
 
     public Record findById(Object id) {
         String realId = String.valueOf(id);
-        waitRecord(realId);
         synchronized (this) {
             return findCurrentClusterFromId(realId).get(realId);
         }

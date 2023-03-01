@@ -6,21 +6,27 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class Cluster<Record> {
+    private final Set<String> blockingId = ConcurrentHashMap.newKeySet();
+    private final Repository<Record> repository;
     private boolean redacted = true;
     private final TreeMap<String, Record> data;
 
-    Cluster(TreeMap<String, Record> map) {
+    Cluster(TreeMap<String, Record> map, Repository<Record> owner) {
         data = map;
+        repository = owner;
     }
 
-    Cluster(String id, Record record) {
+    Cluster(String id, Record record, Repository<Record> owner) {
         data = new TreeMap<>();
         data.put(id, record);
+        repository = owner;
     }
 
     void set(String key, Record record) {
+        waitAndLock(key);
         redacted = true;
         data.put(key, record);
     }
@@ -34,6 +40,7 @@ public final class Cluster<Record> {
     }
 
     Record delete(String key) {
+        waitAndLock(key);
         redacted = true;
         return data.remove(key);
     }
@@ -50,10 +57,6 @@ public final class Cluster<Record> {
         return data.firstKey();
     }
 
-    Set<String> allKeys() {
-        return data.keySet();
-    }
-
     boolean isEmpty() {
         return data.isEmpty();
     }
@@ -66,12 +69,12 @@ public final class Cluster<Record> {
         Map.Entry<String, Record> entry;
         while (it.hasNext()) {
             entry = it.next();
-            if(counter++ > median) {
+            if (counter++ > median) {
                 newClusterData.put(entry.getKey(), entry.getValue());
                 it.remove();
             }
         }
-        return new Cluster<>(newClusterData);
+        return new Cluster<>(newClusterData, repository);
     }
 
     void flush(File toFile, Gson parser) {
@@ -83,5 +86,25 @@ public final class Cluster<Record> {
                 e.printStackTrace();
             }
         }
+    }
+
+    private void waitAndLock(String id) {
+        try {
+            while (blockingId.contains(id)) {
+                repository.wait();
+            }
+            blockingId.add(id);
+        } catch (InterruptedException ignore) {
+        }
+    }
+
+    void unlock(Set<String> identities) {
+        blockingId.removeAll(identities);
+        repository.notifyAll();
+    }
+
+    void rollback(Map<String, Object> rollbackRecord) {
+        rollbackRecord.forEach((id, record) -> set(id, (Record) record));
+        unlock(rollbackRecord.keySet());
     }
 }

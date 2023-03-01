@@ -1,7 +1,5 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.exceptions.TransactionWasCloseException;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,25 +31,21 @@ public class Transaction {
     }
 
     private final Thread callingThread;
-    private Map<Repository<?>, Map<String, Object>> blockedRecord = new HashMap<>();
+    private final Map<Cluster<?>, Map<String, Object>> blockedRecord = new HashMap<>();
 
     public Transaction() {
         callingThread = Thread.currentThread();
         openTransactions.add(this);
     }
 
-    protected void lock(Repository<?> provenance, String recordId, Object nowValue) {
-        if(Objects.isNull(blockedRecord))
-            throw new TransactionWasCloseException();
+    protected void backup(Cluster<?> provenance, String recordId, Object nowValue) {
         if (!blockedRecord.containsKey(provenance)) {
             blockedRecord.put(provenance, new HashMap<>());
         }
         blockedRecord.get(provenance).put(recordId, nowValue);
     }
 
-    protected boolean recordWasLockedCurrentTransaction(Repository<?> provenance, String recordId) {
-        if(Objects.isNull(blockedRecord))
-            throw new TransactionWasCloseException();
+    protected boolean recordWasLockedCurrentTransaction(Cluster<?> provenance, String recordId) {
         if(blockedRecord.containsKey(provenance)) {
             return blockedRecord.get(provenance).containsKey(recordId);
         } else return false;
@@ -59,12 +53,10 @@ public class Transaction {
 
     public void commit() {
         blockedRecord.forEach((repository, stringObjectMap) -> repository.unlock(stringObjectMap.keySet()));
-        blockedRecord = null;
     }
 
     public void rollback() {
-        blockedRecord.forEach(Repository::rollback);
-        blockedRecord = null;
+        blockedRecord.forEach(Cluster::rollback);
     }
 
     protected boolean callingThreadIsDye() {

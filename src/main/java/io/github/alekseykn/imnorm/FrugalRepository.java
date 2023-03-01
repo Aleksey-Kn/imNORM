@@ -41,7 +41,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                     Record now = gson.fromJson(line, type);
                     tempClusterData.put(getIdFromRecord.apply(now), now);
                 });
-                openClusters.put(clusterId, new Cluster<>(tempClusterData));
+                openClusters.put(clusterId, new Cluster<>(tempClusterData, this));
                 checkAndDrop();
                 return openClusters.get(clusterId);
             } catch (IOException e) {
@@ -56,7 +56,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             id = generateAndSetIdForRecord(record);
         }
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
-            Cluster<Record> cluster = new Cluster<>(id, record);
+            Cluster<Record> cluster = new Cluster<>(id, record, this);
             openClusters.put(id, cluster);
             clusterNames.add(id);
         } else {
@@ -75,102 +75,90 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    public Set<Record> findAll() {
-        waitAllRecords();
-        synchronized (this) {
-            return clusterNames.stream()
-                    .flatMap(clusterName -> {
-                        try {
-                            return Files.lines(Path.of(directory.getAbsolutePath(), clusterName));
-                        } catch (IOException e) {
-                            throw new InternalImnormException(e);
-                        }
-                    })
-                    .map(record -> gson.fromJson(record, type))
-                    .collect(Collectors.toSet());
-        }
+    public synchronized Set<Record> findAll() {
+        return clusterNames.stream()
+                .flatMap(clusterName -> {
+                    try {
+                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName));
+                    } catch (IOException e) {
+                        throw new InternalImnormException(e);
+                    }
+                })
+                .map(record -> gson.fromJson(record, type))
+                .collect(Collectors.toSet());
     }
 
     @Override
-    public Set<Record> findAll(int startIndex, int rowCount) {
+    public synchronized Set<Record> findAll(int startIndex, int rowCount) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         Stream<Record> clusterRecords;
-        waitAllRecords();
         try {
-            synchronized (this) {
-                for (String clusterName : clusterNames) {
-                    clusterRecords = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .map(s -> gson.fromJson(s, type));
-                    if (clusterRecords.count() < startIndex) {
-                        startIndex -= clusterRecords.count();
-                    } else {
-                        afterSkippedClusterValues = clusterRecords
-                                .sorted(Comparator.comparing(getIdFromRecord))
-                                .skip(startIndex)
-                                .limit(rowCount)
-                                .collect(Collectors.toList());
-                        result.addAll(afterSkippedClusterValues);
+            for (String clusterName : clusterNames) {
+                clusterRecords = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> gson.fromJson(s, type));
+                if (clusterRecords.count() < startIndex) {
+                    startIndex -= clusterRecords.count();
+                } else {
+                    afterSkippedClusterValues = clusterRecords
+                            .sorted(Comparator.comparing(getIdFromRecord))
+                            .skip(startIndex)
+                            .limit(rowCount)
+                            .collect(Collectors.toList());
+                    result.addAll(afterSkippedClusterValues);
 
-                        rowCount -= afterSkippedClusterValues.size();
-                        startIndex = 0;
-                    }
-                    if (rowCount == 0)
-                        break;
+                    rowCount -= afterSkippedClusterValues.size();
+                    startIndex = 0;
                 }
-                return result;
+                if (rowCount == 0)
+                    break;
             }
+            return result;
         } catch (IOException e) {
             throw new InternalImnormException(e);
         }
     }
 
     @Override
-    public Record deleteById(Object id) {
+    public synchronized Record deleteById(Object id) {
         String realId = String.valueOf(id);
-        waitRecord(realId);
-        synchronized (this) {
-            Cluster<Record> cluster = findCurrentClusterFromId(realId);
-            if (Objects.isNull(cluster)) {
-                return null;
-            }
-            String pastFirstKey = cluster.firstKey();
-            Record record = cluster.delete(realId);
-            try {
-                if (cluster.isEmpty()) {
-                    Files.delete(Path.of(directory.getAbsolutePath(), realId));
-                    clusterNames.remove(realId);
-                    openClusters.remove(realId);
-                } else if (pastFirstKey.equals(realId)) {
-                    Files.delete(Path.of(directory.getAbsolutePath(), realId));
-                    clusterNames.remove(realId);
-                    clusterNames.add(cluster.firstKey());
-                    openClusters.put(cluster.firstKey(), openClusters.remove(realId));
-                }
-            } catch (IOException e) {
-                throw new InternalImnormException(e);
-            }
-            return record;
+        Cluster<Record> cluster = findCurrentClusterFromId(realId);
+        if (Objects.isNull(cluster)) {
+            return null;
         }
+        String pastFirstKey = cluster.firstKey();
+        Record record = cluster.delete(realId);
+        try {
+            if (cluster.isEmpty()) {
+                Files.delete(Path.of(directory.getAbsolutePath(), realId));
+                clusterNames.remove(realId);
+                openClusters.remove(realId);
+            } else if (pastFirstKey.equals(realId)) {
+                Files.delete(Path.of(directory.getAbsolutePath(), realId));
+                clusterNames.remove(realId);
+                clusterNames.add(cluster.firstKey());
+                openClusters.put(cluster.firstKey(), openClusters.remove(realId));
+            }
+        } catch (IOException e) {
+            throw new InternalImnormException(e);
+        }
+        return record;
     }
 
     @Override
-    public void flush() {
-        waitAllRecords();
-        synchronized (this) {
-            for (Map.Entry<String, Cluster<Record>> entry : openClusters.entrySet()) {
-                if (needGenerateId) {
-                    try (DataOutputStream outputStream = new DataOutputStream(
-                            new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
-                        outputStream.writeLong(sequence);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+    public synchronized void flush() {
+        for (Map.Entry<String, Cluster<Record>> entry : openClusters.entrySet()) {
+            if (needGenerateId) {
+                try (DataOutputStream outputStream = new DataOutputStream(
+                        new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
+                    outputStream.writeLong(sequence);
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-                entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
             }
-            openClusters.clear();
+            entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
         }
+        openClusters.clear();
     }
 
     private void checkAndDrop() {
