@@ -1,7 +1,5 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.exceptions.TransactionWasCloseException;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,7 +17,7 @@ public class Transaction {
                 Transaction now;
                 while (iterator.hasNext()) {
                     now = iterator.next();
-                    if(now.callingThreadIsDye()) {
+                    if (now.callingThreadIsDye()) {
                         now.rollback();
                         iterator.remove();
                     }
@@ -33,41 +31,37 @@ public class Transaction {
     }
 
     private final Thread callingThread;
-    private Map<Repository<?>, Map<String, Object>> blockedRecord = new HashMap<>();
+    private final Map<Cluster<?>, Set<String>> blockingId = new HashMap<>();
 
     public Transaction() {
         callingThread = Thread.currentThread();
         openTransactions.add(this);
     }
 
-    protected void lock(Repository<?> provenance, String recordId, Object nowValue) {
-        if(Objects.isNull(blockedRecord))
-            throw new TransactionWasCloseException();
-        if (!blockedRecord.containsKey(provenance)) {
-            blockedRecord.put(provenance, new HashMap<>());
+    void captureLock(Cluster<?> provenance, String recordId) {
+        if (!blockingId.containsKey(provenance)) {
+            blockingId.put(provenance, new HashSet<>());
         }
-        blockedRecord.get(provenance).put(recordId, nowValue);
+        blockingId.get(provenance).add(recordId);
     }
 
-    protected boolean recordWasLockedCurrentTransaction(Repository<?> provenance, String recordId) {
-        if(Objects.isNull(blockedRecord))
-            throw new TransactionWasCloseException();
-        if(blockedRecord.containsKey(provenance)) {
-            return blockedRecord.get(provenance).containsKey(recordId);
+    boolean lockOwner(Cluster<?> provenance, String recordId) {
+        if (blockingId.containsKey(provenance)) {
+            return blockingId.get(provenance).contains(recordId);
         } else return false;
     }
 
     public void commit() {
-        blockedRecord.forEach((repository, stringObjectMap) -> repository.unlock(stringObjectMap.keySet()));
-        blockedRecord = null;
+        blockingId.forEach((cluster, ids) -> cluster.commit(this, ids));
+        blockingId.clear();
     }
 
     public void rollback() {
-        blockedRecord.forEach(Repository::rollback);
-        blockedRecord = null;
+        blockingId.forEach(((cluster, ids) -> cluster.rollback(this, ids)));
+        blockingId.clear();
     }
 
     protected boolean callingThreadIsDye() {
-       return !callingThread.isAlive();
+        return !callingThread.isAlive();
     }
 }

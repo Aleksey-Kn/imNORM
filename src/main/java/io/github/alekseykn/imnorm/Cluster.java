@@ -6,36 +6,76 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class Cluster<Record> {
+    private final Set<String> blockingId = ConcurrentHashMap.newKeySet();
+    private final Repository<Record> repository;
+    private final Map<Transaction, TreeMap<String, Record>> copyDataForTransactions = new HashMap<>();
     private boolean redacted = true;
-    private final TreeMap<String, Record> data;
+    private TreeMap<String, Record> data = new TreeMap<>();
+    private final String firstKey;
 
-    Cluster(TreeMap<String, Record> map) {
+    Cluster(TreeMap<String, Record> map, Repository<Record> owner) {
         data = map;
+        repository = owner;
+        firstKey = data.firstKey();
     }
 
-    Cluster(String id, Record record) {
-        data = new TreeMap<>();
+    Cluster(String id, Record record, Repository<Record> owner) {
         data.put(id, record);
+        repository = owner;
+        firstKey = id;
+    }
+
+    Cluster(String id, Record record, Repository<Record> owner, Transaction transaction) {
+        copyDataForTransactions.put(transaction, new TreeMap<>());
+        copyDataForTransactions.get(transaction).put(id, record);
+        repository = owner;
+        firstKey = id;
     }
 
     void set(String key, Record record) {
+        waitRecord(key);
         redacted = true;
         data.put(key, record);
+    }
+
+    void set(String key, Record record, Transaction transaction) {
+        lockOrWait(key, transaction);
+        copyDataForTransactions.get(transaction).put(key, record);
     }
 
     Record get(String key) {
         return data.get(key);
     }
 
+    Record get(String key, Transaction transaction) {
+        return copyDataForTransactions.containsKey(transaction)
+                ? copyDataForTransactions.get(transaction).get(key)
+                : data.get(key);
+    }
+
     Collection<Record> findAll() {
         return data.values();
     }
 
+    Collection<Record> findAll(Transaction transaction) {
+        return copyDataForTransactions.containsKey(transaction)
+                ? copyDataForTransactions.get(transaction).values()
+                : data.values();
+    }
+
     Record delete(String key) {
+        waitRecord(key);
         redacted = true;
         return data.remove(key);
+    }
+
+    Record delete(String key, Transaction transaction) {
+        lockOrWait(key, transaction);
+        redacted = true;
+        return copyDataForTransactions.get(transaction).remove(key);
     }
 
     int size() {
@@ -46,12 +86,14 @@ public final class Cluster<Record> {
         return data.containsKey(key);
     }
 
-    String firstKey() {
-        return data.firstKey();
+    boolean containsKey(String key, Transaction transaction) {
+        return copyDataForTransactions.containsKey(transaction)
+                ? copyDataForTransactions.get(transaction).containsKey(key)
+                : data.containsKey(key);
     }
 
-    Set<String> allKeys() {
-        return data.keySet();
+    String getFirstKey() {
+        return firstKey;
     }
 
     boolean isEmpty() {
@@ -66,12 +108,12 @@ public final class Cluster<Record> {
         Map.Entry<String, Record> entry;
         while (it.hasNext()) {
             entry = it.next();
-            if(counter++ > median) {
+            if (counter++ > median) {
                 newClusterData.put(entry.getKey(), entry.getValue());
                 it.remove();
             }
         }
-        return new Cluster<>(newClusterData);
+        return new Cluster<>(newClusterData, repository);
     }
 
     void flush(File toFile, Gson parser) {
@@ -83,5 +125,49 @@ public final class Cluster<Record> {
                 e.printStackTrace();
             }
         }
+    }
+
+    private void waitRecord(String id) {
+        try {
+            while (blockingId.contains(id)) {
+                repository.wait();
+            }
+        } catch (InterruptedException ignore) {
+        }
+    }
+
+    private void lockOrWait(String id, Transaction transaction) {
+        if (!transaction.lockOwner(this, id)) {
+            if (!copyDataForTransactions.containsKey(transaction)) {
+                copyDataForTransactions.put(transaction, new TreeMap<>());
+            }
+            waitRecord(id);
+            blockingId.add(id);
+            transaction.captureLock(this, id);
+        }
+    }
+
+    private void unlock(Set<String> identities) {
+        synchronized (repository) {
+            blockingId.removeAll(identities);
+            repository.notifyAll();
+        }
+    }
+
+    void commit(Transaction transaction, Set<String> needUnlock) {
+        if (copyDataForTransactions.containsKey(transaction)) {
+            data = copyDataForTransactions.remove(transaction);
+            unlock(needUnlock);
+            redacted = true;
+        }
+    }
+
+    void rollback(Transaction transaction, Set<String> needUnlock) {
+        copyDataForTransactions.remove(transaction);
+        unlock(needUnlock);
+    }
+
+    boolean hasNotOpenTransactions() {
+        return blockingId.isEmpty();
     }
 }
