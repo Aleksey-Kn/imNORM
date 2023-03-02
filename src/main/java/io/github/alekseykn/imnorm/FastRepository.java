@@ -45,10 +45,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized Record create(String id, Record record) {
-        if (needGenerateId) {
-            id = generateAndSetIdForRecord(record);
-        }
+    protected synchronized Record create(final String id, final Record record) {
         if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
             data.put(id, new Cluster<>(id, record, this));
         } else {
@@ -64,10 +61,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized Record create(String id, Record record, Transaction transaction) {
-        if (needGenerateId) {
-            id = generateAndSetIdForRecord(record);
-        }
+    protected synchronized Record create(final String id, final Record record, final Transaction transaction) {
         if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
             data.put(id, new Cluster<>(id, record, this, transaction));
         } else {
