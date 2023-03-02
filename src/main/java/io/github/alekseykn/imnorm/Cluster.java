@@ -13,37 +13,69 @@ public final class Cluster<Record> {
     private final Repository<Record> repository;
     private final Map<Transaction, TreeMap<String, Record>> copyDataForTransactions = new HashMap<>();
     private boolean redacted = true;
-    private TreeMap<String, Record> data;
+    private TreeMap<String, Record> data = new TreeMap<>();
+    private final String firstKey;
 
     Cluster(TreeMap<String, Record> map, Repository<Record> owner) {
         data = map;
         repository = owner;
+        firstKey = data.firstKey();
     }
 
     Cluster(String id, Record record, Repository<Record> owner) {
-        data = new TreeMap<>();
         data.put(id, record);
         repository = owner;
+        firstKey = id;
+    }
+
+    Cluster(String id, Record record, Repository<Record> owner, Transaction transaction) {
+        copyDataForTransactions.put(transaction, new TreeMap<>());
+        copyDataForTransactions.get(transaction).put(id, record);
+        repository = owner;
+        firstKey = id;
     }
 
     void set(String key, Record record) {
-        waitAndLock(key);
+        waitRecord(key);
         redacted = true;
         data.put(key, record);
+    }
+
+    void set(String key, Record record, Transaction transaction) {
+        lockOrWait(key, transaction);
+        copyDataForTransactions.get(transaction).put(key, record);
     }
 
     Record get(String key) {
         return data.get(key);
     }
 
+    Record get(String key, Transaction transaction) {
+        return copyDataForTransactions.containsKey(transaction)
+                ? copyDataForTransactions.get(transaction).get(key)
+                : data.get(key);
+    }
+
     Collection<Record> findAll() {
         return data.values();
     }
 
+    Collection<Record> findAll(Transaction transaction) {
+        return copyDataForTransactions.containsKey(transaction)
+                ? copyDataForTransactions.get(transaction).values()
+                : data.values();
+    }
+
     Record delete(String key) {
-        waitAndLock(key);
+        waitRecord(key);
         redacted = true;
         return data.remove(key);
+    }
+
+    Record delete(String key, Transaction transaction) {
+        lockOrWait(key, transaction);
+        redacted = true;
+        return copyDataForTransactions.get(transaction).remove(key);
     }
 
     int size() {
@@ -54,8 +86,14 @@ public final class Cluster<Record> {
         return data.containsKey(key);
     }
 
-    String firstKey() {
-        return data.firstKey();
+    boolean containsKey(String key, Transaction transaction) {
+        return copyDataForTransactions.containsKey(transaction)
+                ? copyDataForTransactions.get(transaction).containsKey(key)
+                : data.containsKey(key);
+    }
+
+    String getFirstKey() {
+        return firstKey;
     }
 
     boolean isEmpty() {
@@ -89,29 +127,47 @@ public final class Cluster<Record> {
         }
     }
 
-    private void waitAndLock(String id) {
+    private void waitRecord(String id) {
         try {
             while (blockingId.contains(id)) {
                 repository.wait();
             }
-            blockingId.add(id);
         } catch (InterruptedException ignore) {
         }
     }
 
+    private void lockOrWait(String id, Transaction transaction) {
+        if (!transaction.lockOwner(this, id)) {
+            if (!copyDataForTransactions.containsKey(transaction)) {
+                copyDataForTransactions.put(transaction, new TreeMap<>());
+            }
+            waitRecord(id);
+            blockingId.add(id);
+            transaction.captureLock(this, id);
+        }
+    }
+
     private void unlock(Set<String> identities) {
-        blockingId.removeAll(identities);
-        repository.notifyAll();
+        synchronized (repository) {
+            blockingId.removeAll(identities);
+            repository.notifyAll();
+        }
     }
 
     void commit(Transaction transaction, Set<String> needUnlock) {
-        data = copyDataForTransactions.remove(transaction);
+        if (copyDataForTransactions.containsKey(transaction)) {
+            data = copyDataForTransactions.remove(transaction);
+            unlock(needUnlock);
+            redacted = true;
+        }
+    }
+
+    void rollback(Transaction transaction, Set<String> needUnlock) {
+        copyDataForTransactions.remove(transaction);
         unlock(needUnlock);
     }
 
-    void rollback(Map<String, Object> needUndo, Set<String> needRemove) {
-        needUndo.forEach((id, record) -> set(id, (Record) record));
-        unlock(needUndo.keySet());
-        needRemove.forEach(this::delete);
+    boolean hasNotOpenTransactions() {
+        return blockingId.isEmpty();
     }
 }
