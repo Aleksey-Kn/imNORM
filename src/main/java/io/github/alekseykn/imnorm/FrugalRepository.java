@@ -24,6 +24,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         this.maxClusterCount = maxClusterCount;
         assert maxClusterCount > 1;
         openClusters = new LinkedHashMap<>(maxClusterCount + 1);
+        clusterNames.addAll(Arrays.asList(Objects.requireNonNull(directory.list())));
     }
 
     @Override
