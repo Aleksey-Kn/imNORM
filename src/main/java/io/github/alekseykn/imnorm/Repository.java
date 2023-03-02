@@ -96,6 +96,9 @@ public abstract class Repository<Record> {
             }
             return record;
         } else {
+            if(needGenerateId) {
+                id = generateAndSetIdForRecord(record);
+            }
             return create(id, record);
         }
     }
@@ -109,6 +112,9 @@ public abstract class Repository<Record> {
             }
             return record;
         } else {
+            if(needGenerateId) {
+                id = generateAndSetIdForRecord(record);
+            }
             return create(id, record, transaction);
         }
     }
