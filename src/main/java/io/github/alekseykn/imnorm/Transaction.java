@@ -31,32 +31,43 @@ public class Transaction {
     }
 
     private final Thread callingThread;
-    private final Map<Cluster<?>, Map<String, Object>> blockedRecord = new HashMap<>();
+    private final Map<Cluster<?>, Map<String, Object>> redactedInTransactionRecord = new HashMap<>();
+    private final Map<Cluster<?>, Set<String>> addedInTransactionRecord = new HashMap<>();
 
     public Transaction() {
         callingThread = Thread.currentThread();
         openTransactions.add(this);
     }
 
-    protected void backup(Cluster<?> provenance, String recordId, Object nowValue) {
-        if (!blockedRecord.containsKey(provenance)) {
-            blockedRecord.put(provenance, new HashMap<>());
+    void backup(Cluster<?> provenance, String recordId, Object nowValue) {
+        if (!redactedInTransactionRecord.containsKey(provenance)) {
+            redactedInTransactionRecord.put(provenance, new HashMap<>());
         }
-        blockedRecord.get(provenance).put(recordId, nowValue);
+        redactedInTransactionRecord.get(provenance).put(recordId, nowValue);
     }
 
-    protected boolean recordWasLockedCurrentTransaction(Cluster<?> provenance, String recordId) {
-        if(blockedRecord.containsKey(provenance)) {
-            return blockedRecord.get(provenance).containsKey(recordId);
+    void rememberOfAdd(Cluster<?> provenance, String recordId) {
+        if(!addedInTransactionRecord.containsKey(provenance)) {
+            addedInTransactionRecord.put(provenance, new HashSet<>());
+        }
+        addedInTransactionRecord.get(provenance).add(recordId);
+    }
+
+    boolean recordWasLockedCurrentTransaction(Cluster<?> provenance, String recordId) {
+        if(redactedInTransactionRecord.containsKey(provenance)) {
+            return redactedInTransactionRecord.get(provenance).containsKey(recordId);
         } else return false;
     }
 
     public void commit() {
-        blockedRecord.forEach((repository, stringObjectMap) -> repository.unlock(stringObjectMap.keySet()));
+        redactedInTransactionRecord.forEach((cluster, stringObjectMap) -> cluster.commit(this, stringObjectMap.keySet()));
+        redactedInTransactionRecord.clear();
     }
 
     public void rollback() {
-        blockedRecord.forEach(Cluster::rollback);
+        redactedInTransactionRecord.forEach(((cluster, stringObjectMap) ->
+                cluster.rollback(stringObjectMap, addedInTransactionRecord.get(cluster))));
+        redactedInTransactionRecord.clear();
     }
 
     protected boolean callingThreadIsDye() {

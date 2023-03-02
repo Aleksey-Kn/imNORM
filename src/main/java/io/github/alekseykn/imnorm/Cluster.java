@@ -11,8 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class Cluster<Record> {
     private final Set<String> blockingId = ConcurrentHashMap.newKeySet();
     private final Repository<Record> repository;
+    private final Map<Transaction, TreeMap<String, Record>> copyDataForTransactions = new HashMap<>();
     private boolean redacted = true;
-    private final TreeMap<String, Record> data;
+    private TreeMap<String, Record> data;
 
     Cluster(TreeMap<String, Record> map, Repository<Record> owner) {
         data = map;
@@ -98,13 +99,19 @@ public final class Cluster<Record> {
         }
     }
 
-    void unlock(Set<String> identities) {
+    private void unlock(Set<String> identities) {
         blockingId.removeAll(identities);
         repository.notifyAll();
     }
 
-    void rollback(Map<String, Object> rollbackRecord) {
-        rollbackRecord.forEach((id, record) -> set(id, (Record) record));
-        unlock(rollbackRecord.keySet());
+    void commit(Transaction transaction, Set<String> needUnlock) {
+        data = copyDataForTransactions.remove(transaction);
+        unlock(needUnlock);
+    }
+
+    void rollback(Map<String, Object> needUndo, Set<String> needRemove) {
+        needUndo.forEach((id, record) -> set(id, (Record) record));
+        unlock(needUndo.keySet());
+        needRemove.forEach(this::delete);
     }
 }
