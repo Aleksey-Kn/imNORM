@@ -57,8 +57,23 @@ public final class FastRepository<Record> extends Repository<Record> {
             currentCluster.set(id, record);
             if (currentCluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
                 Cluster<Record> newCluster = currentCluster.split();
-                data.put(currentCluster.firstKey(), newCluster);
+                data.put(currentCluster.getFirstKey(), newCluster);
             }
+        }
+        return record;
+    }
+
+    @Override
+    protected synchronized Record create(String id, Record record, Transaction transaction) {
+        if (needGenerateId) {
+            id = generateAndSetIdForRecord(record);
+        }
+        if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
+            data.put(id, new Cluster<>(id, record, this, transaction));
+        } else {
+            Cluster<Record> currentCluster = findCurrentClusterFromId(id);
+            assert currentCluster != null;
+            currentCluster.set(id, record, transaction);
         }
         return record;
     }
@@ -69,13 +84,16 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    public Set<Record> findAll(int startIndex, int rowCount) {
-        HashSet<Record> result = new HashSet<>(rowCount);
+    public synchronized Set<Record> findAll(Transaction transaction) {
+        return data.values().stream()
+                .map(recordCluster -> recordCluster.findAll(transaction))
+                .flatMap(Collection::stream)
+                .collect(Collectors.toSet());
+    }
+
+    private Set<Record> pagination(List<Collection<Record>> clustersData, int startIndex, int rowCount) {
         List<Record> afterSkippedClusterValues;
-        List<Collection<Record>> clustersData;
-        synchronized (this) {
-            clustersData = data.values().stream().map(Cluster::findAll).collect(Collectors.toList());
-        }
+        HashSet<Record> result = new HashSet<>(rowCount);
         for (Collection<Record> clusterRecord : clustersData) {
             if (clusterRecord.size() < startIndex) {
                 startIndex -= clusterRecord.size();
@@ -97,27 +115,58 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
+    public Set<Record> findAll(int startIndex, int rowCount) {
+        List<Collection<Record>> clustersData;
+        synchronized (this) {
+            clustersData = data.values().stream().map(Cluster::findAll).collect(Collectors.toList());
+        }
+        return pagination(clustersData, startIndex, rowCount);
+    }
+
+    @Override
+    public Set<Record> findAll(int startIndex, int rowCount, Transaction transaction) {
+        List<Collection<Record>> clustersData;
+        synchronized (this) {
+            clustersData = data.values().stream()
+                    .map(recordCluster -> recordCluster.findAll(transaction))
+                    .collect(Collectors.toList());
+        }
+        return pagination(clustersData, startIndex, rowCount);
+    }
+
+    @Override
     public synchronized Record deleteById(Object id) {
         String realId = String.valueOf(id);
         Cluster<Record> cluster = findCurrentClusterFromId(realId);
         if (Objects.isNull(cluster)) {
             return null;
         }
-        String pastFirstKey = cluster.firstKey();
         Record record = cluster.delete(realId);
         try {
             if (cluster.isEmpty()) {
-                Files.delete(Path.of(directory.getAbsolutePath(), realId));
-                data.remove(realId);
-            } else if (pastFirstKey.equals(realId)) {
-                Files.delete(Path.of(directory.getAbsolutePath(), realId));
-                data.remove(realId);
-                data.put(cluster.firstKey(), cluster);
+                Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
+                data.remove(cluster.getFirstKey());
             }
         } catch (IOException e) {
             throw new InternalImnormException(e);
         }
         return record;
+    }
+
+    @Override
+    public Record deleteById(Object id, Transaction transaction) {
+        String realId = String.valueOf(id);
+        Cluster<Record> cluster = findCurrentClusterFromId(realId);
+        if (Objects.isNull(cluster)) {
+            return null;
+        }
+        return cluster.delete(realId, transaction);
+    }
+
+    @Override
+    public void deleteAll() {
+        super.deleteAll();
+        data.clear();
     }
 
     @Override
