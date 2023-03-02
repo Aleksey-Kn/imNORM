@@ -19,7 +19,6 @@ import java.util.function.Function;
 public abstract class Repository<Record> {
     protected static final int CLUSTER_MAX_SIZE = 10_000;
 
-    protected final Set<String> blockingId = ConcurrentHashMap.newKeySet();
     protected final Field recordId;
     protected final Function<Record, String> getIdFromRecord;
     protected final boolean needGenerateId;
@@ -86,6 +85,8 @@ public abstract class Repository<Record> {
 
     protected abstract Record create(String id, Record record);
 
+    protected abstract Record create(String id, Record record, Transaction transaction);
+
     public Record save(Record record) {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
@@ -99,22 +100,55 @@ public abstract class Repository<Record> {
         }
     }
 
-    public Record findById(Object id) {
-        String realId = String.valueOf(id);
-        synchronized (this) {
-            return findCurrentClusterFromId(realId).get(realId);
+    public Record save(Record record, Transaction transaction) {
+        String id = getIdFromRecord.apply(record);
+        Cluster<Record> cluster = findCurrentClusterFromId(id);
+        if (Objects.nonNull(cluster) && cluster.containsKey(id, transaction)) {
+            synchronized (this) {
+                cluster.set(id, record, transaction);
+            }
+            return record;
+        } else {
+            return create(id, record, transaction);
         }
+    }
+
+    public synchronized Record findById(Object id) {
+        String realId = String.valueOf(id);
+        return findCurrentClusterFromId(realId).get(realId);
+    }
+
+    public synchronized Record findById(Object id, Transaction transaction) {
+        String realId = String.valueOf(id);
+        return findCurrentClusterFromId(realId).get(realId, transaction);
     }
 
     public abstract Set<Record> findAll();
 
+    public abstract Set<Record> findAll(Transaction transaction);
+
     public abstract Set<Record> findAll(int startIndex, int rowCount);
 
+    public abstract Set<Record> findAll(int startIndex, int rowCount, Transaction transaction);
+
     public abstract Record deleteById(Object id);
+
+    public abstract Record deleteById(Object id, Transaction transaction);
 
     public Record delete(Record record) {
         return deleteById(getIdFromRecord.apply(record));
     }
+
+    public Record delete(Record record, Transaction transaction) {
+        return deleteById(getIdFromRecord.apply(record));
+    }
+
+    public void deleteAll() {
+        for(File file: Objects.requireNonNull(directory.listFiles())) {
+            if(!file.delete())
+                throw new InternalImnormException(file.getAbsolutePath() + ".delete()");
+        }
+    };
 
     public abstract void flush();
 }
