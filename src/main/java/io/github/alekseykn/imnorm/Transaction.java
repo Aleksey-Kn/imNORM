@@ -17,7 +17,7 @@ public class Transaction {
                 Transaction now;
                 while (iterator.hasNext()) {
                     now = iterator.next();
-                    if(now.callingThreadIsDye()) {
+                    if (now.callingThreadIsDye()) {
                         now.rollback();
                         iterator.remove();
                     }
@@ -31,46 +31,37 @@ public class Transaction {
     }
 
     private final Thread callingThread;
-    private final Map<Cluster<?>, Map<String, Object>> redactedInTransactionRecord = new HashMap<>();
-    private final Map<Cluster<?>, Set<String>> addedInTransactionRecord = new HashMap<>();
+    private final Map<Cluster<?>, Set<String>> blockingId = new HashMap<>();
 
     public Transaction() {
         callingThread = Thread.currentThread();
         openTransactions.add(this);
     }
 
-    void backup(Cluster<?> provenance, String recordId, Object nowValue) {
-        if (!redactedInTransactionRecord.containsKey(provenance)) {
-            redactedInTransactionRecord.put(provenance, new HashMap<>());
+    void captureLock(Cluster<?> provenance, String recordId) {
+        if (!blockingId.containsKey(provenance)) {
+            blockingId.put(provenance, new HashSet<>());
         }
-        redactedInTransactionRecord.get(provenance).put(recordId, nowValue);
+        blockingId.get(provenance).add(recordId);
     }
 
-    void rememberOfAdd(Cluster<?> provenance, String recordId) {
-        if(!addedInTransactionRecord.containsKey(provenance)) {
-            addedInTransactionRecord.put(provenance, new HashSet<>());
-        }
-        addedInTransactionRecord.get(provenance).add(recordId);
-    }
-
-    boolean recordWasLockedCurrentTransaction(Cluster<?> provenance, String recordId) {
-        if(redactedInTransactionRecord.containsKey(provenance)) {
-            return redactedInTransactionRecord.get(provenance).containsKey(recordId);
+    boolean lockOwner(Cluster<?> provenance, String recordId) {
+        if (blockingId.containsKey(provenance)) {
+            return blockingId.get(provenance).contains(recordId);
         } else return false;
     }
 
     public void commit() {
-        redactedInTransactionRecord.forEach((cluster, stringObjectMap) -> cluster.commit(this, stringObjectMap.keySet()));
-        redactedInTransactionRecord.clear();
+        blockingId.forEach((cluster, ids) -> cluster.commit(this, ids));
+        blockingId.clear();
     }
 
     public void rollback() {
-        redactedInTransactionRecord.forEach(((cluster, stringObjectMap) ->
-                cluster.rollback(stringObjectMap, addedInTransactionRecord.get(cluster))));
-        redactedInTransactionRecord.clear();
+        blockingId.forEach(((cluster, ids) -> cluster.rollback(this, ids)));
+        blockingId.clear();
     }
 
     protected boolean callingThreadIsDye() {
-       return !callingThread.isAlive();
+        return !callingThread.isAlive();
     }
 }
