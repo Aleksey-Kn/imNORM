@@ -51,10 +51,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized Record create(String id, Record record) {
-        if (needGenerateId) {
-            id = generateAndSetIdForRecord(record);
-        }
+    protected synchronized Record create(final String id, final Record record) {
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
             Cluster<Record> cluster = new Cluster<>(id, record, this);
             openClusters.put(id, cluster);
@@ -75,10 +72,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized Record create(String id, Record record, Transaction transaction) {
-        if (needGenerateId) {
-            id = generateAndSetIdForRecord(record);
-        }
+    protected synchronized Record create(final String id, final Record record, final Transaction transaction) {
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
             Cluster<Record> cluster = new Cluster<>(id, record, this, transaction);
             openClusters.put(id, cluster);
