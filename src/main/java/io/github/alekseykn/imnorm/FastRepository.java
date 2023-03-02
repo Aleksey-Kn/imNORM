@@ -74,14 +74,15 @@ public final class FastRepository<Record> extends Repository<Record> {
 
     @Override
     public synchronized Set<Record> findAll() {
-        return data.values().stream().map(Cluster::findAll).flatMap(Collection::stream).collect(Collectors.toSet());
+        return data.values().stream()
+                .flatMap(recordCluster -> recordCluster.findAll().stream())
+                .collect(Collectors.toSet());
     }
 
     @Override
     public synchronized Set<Record> findAll(Transaction transaction) {
         return data.values().stream()
-                .map(recordCluster -> recordCluster.findAll(transaction))
-                .flatMap(Collection::stream)
+                .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
     }
 
@@ -112,7 +113,9 @@ public final class FastRepository<Record> extends Repository<Record> {
     public Set<Record> findAll(int startIndex, int rowCount) {
         List<Collection<Record>> clustersData;
         synchronized (this) {
-            clustersData = data.values().stream().map(Cluster::findAll).collect(Collectors.toList());
+            clustersData = data.values().stream()
+                    .map(Cluster::findAll)
+                    .collect(Collectors.toList());
         }
         return pagination(clustersData, startIndex, rowCount);
     }
