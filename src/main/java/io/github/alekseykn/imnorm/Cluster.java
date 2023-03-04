@@ -1,17 +1,16 @@
 package io.github.alekseykn.imnorm;
 
 import com.google.gson.Gson;
+import io.github.alekseykn.imnorm.exceptions.OtherTransactionRedactCurrentClusterException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class Cluster<Record> {
-    private final Set<String> blockingId = ConcurrentHashMap.newKeySet();
     private final Repository<Record> repository;
-    private final Map<Transaction, TreeMap<String, Record>> copyDataForTransactions = new HashMap<>();
+    private TreeMap<String, Record> copyDataForTransactions = null;
     private boolean redacted = true;
     private TreeMap<String, Record> data = new TreeMap<>();
     private final String firstKey;
@@ -29,53 +28,58 @@ public final class Cluster<Record> {
     }
 
     Cluster(String id, Record record, Repository<Record> owner, Transaction transaction) {
-        copyDataForTransactions.put(transaction, new TreeMap<>());
-        copyDataForTransactions.get(transaction).put(id, record);
+        copyDataForTransactions = new TreeMap<>();
+        copyDataForTransactions.put(id, record);
         repository = owner;
         firstKey = id;
+
+        transaction.captureLock(this);
     }
 
     void set(String key, Record record) {
-        waitRecord(key);
+        if(Objects.nonNull(copyDataForTransactions))
+            throw new OtherTransactionRedactCurrentClusterException(firstKey);
         redacted = true;
         data.put(key, record);
     }
 
     void set(String key, Record record, Transaction transaction) {
-        lockOrWait(key, transaction);
-        copyDataForTransactions.get(transaction).put(key, record);
+        lock(transaction);
+        copyDataForTransactions.put(key, record);
     }
 
     Record get(String key) {
+        if(Objects.nonNull(copyDataForTransactions))
+            throw new OtherTransactionRedactCurrentClusterException(firstKey);
         return data.get(key);
     }
 
     Record get(String key, Transaction transaction) {
-        return copyDataForTransactions.containsKey(transaction)
-                ? copyDataForTransactions.get(transaction).get(key)
-                : data.get(key);
+        lock(transaction);
+        return copyDataForTransactions.get(key);
     }
 
     Collection<Record> findAll() {
+        if(Objects.nonNull(copyDataForTransactions))
+            throw new OtherTransactionRedactCurrentClusterException(firstKey);
         return data.values();
     }
 
     Collection<Record> findAll(Transaction transaction) {
-        return copyDataForTransactions.containsKey(transaction)
-                ? copyDataForTransactions.get(transaction).values()
-                : data.values();
+        lock(transaction);
+        return copyDataForTransactions.values();
     }
 
     Record delete(String key) {
-        waitRecord(key);
+        if(Objects.nonNull(copyDataForTransactions))
+            throw new OtherTransactionRedactCurrentClusterException(firstKey);
         redacted = true;
         return data.remove(key);
     }
 
     Record delete(String key, Transaction transaction) {
-        lockOrWait(key, transaction);
-        redacted = true;
-        return copyDataForTransactions.get(transaction).remove(key);
+        lock(transaction);
+        return copyDataForTransactions.remove(key);
     }
 
     int size() {
@@ -86,9 +90,9 @@ public final class Cluster<Record> {
         return data.containsKey(key);
     }
 
-    boolean containsKey(String key, Transaction transaction) {
-        return copyDataForTransactions.containsKey(transaction)
-                ? copyDataForTransactions.get(transaction).containsKey(key)
+    boolean containsKeyFromTransaction(String key) {
+        return Objects.nonNull(copyDataForTransactions)
+                ? copyDataForTransactions.containsKey(key)
                 : data.containsKey(key);
     }
 
@@ -127,47 +131,28 @@ public final class Cluster<Record> {
         }
     }
 
-    private void waitRecord(String id) {
-        try {
-            while (blockingId.contains(id)) {
-                repository.wait();
-            }
-        } catch (InterruptedException ignore) {
+    private void lock(Transaction transaction) {
+        if (!transaction.lockOwner(this)) {
+            if (Objects.isNull(copyDataForTransactions)) {
+                copyDataForTransactions = new TreeMap<>(data);
+            } else throw new OtherTransactionRedactCurrentClusterException(firstKey);
+            transaction.captureLock(this);
         }
     }
 
-    private void lockOrWait(String id, Transaction transaction) {
-        if (!transaction.lockOwner(this, id)) {
-            if (!copyDataForTransactions.containsKey(transaction)) {
-                copyDataForTransactions.put(transaction, new TreeMap<>());
-            }
-            waitRecord(id);
-            blockingId.add(id);
-            transaction.captureLock(this, id);
-        }
-    }
-
-    private void unlock(Set<String> identities) {
-        synchronized (repository) {
-            blockingId.removeAll(identities);
-            repository.notifyAll();
-        }
-    }
-
-    void commit(Transaction transaction, Set<String> needUnlock) {
-        if (copyDataForTransactions.containsKey(transaction)) {
-            data = copyDataForTransactions.remove(transaction);
-            unlock(needUnlock);
+    void commit() {
+        if (Objects.nonNull(copyDataForTransactions)) {
+            data = copyDataForTransactions;
+            copyDataForTransactions = null;
             redacted = true;
         }
     }
 
-    void rollback(Transaction transaction, Set<String> needUnlock) {
-        copyDataForTransactions.remove(transaction);
-        unlock(needUnlock);
+    void rollback() {
+        copyDataForTransactions = null;
     }
 
     boolean hasNotOpenTransactions() {
-        return blockingId.isEmpty();
+        return Objects.isNull(copyDataForTransactions);
     }
 }
