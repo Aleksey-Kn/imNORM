@@ -1,13 +1,17 @@
 package io.github.alekseykn.imnorm;
 
-import java.util.HashMap;
-import java.util.Map;
+import io.github.alekseykn.imnorm.exceptions.TransactionWasClosedException;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Transaction {
     private final static Set<Transaction> openTransactions = ConcurrentHashMap.newKeySet();
+
+    private final static Object mutex = new Object();
 
     static {
         Thread remover = new Thread(() -> {
@@ -30,38 +34,67 @@ public class Transaction {
         remover.start();
     }
 
-    private final Thread callingThread;
-    private final Map<Cluster<?>, Set<String>> blockingId = new HashMap<>();
+    public static Transaction noWaitTransaction() {
+        return new Transaction();
+    }
 
-    public Transaction() {
+    public static Transaction waitTransaction() {
+        synchronized (mutex) {
+            try {
+                while (!openTransactions.isEmpty()) {
+                    mutex.wait(1000);
+                }
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            return new Transaction();
+        }
+    }
+
+
+    private final Thread callingThread;
+    private Set<Cluster<?>> blockingClusters = new HashSet<>();
+
+    private Transaction() {
         callingThread = Thread.currentThread();
         openTransactions.add(this);
     }
 
-    void captureLock(Cluster<?> provenance, String recordId) {
-        if (!blockingId.containsKey(provenance)) {
-            blockingId.put(provenance, new HashSet<>());
-        }
-        blockingId.get(provenance).add(recordId);
+    void captureLock(Cluster<?> provenance) {
+        if(Objects.isNull(blockingClusters))
+            throw new TransactionWasClosedException();
+        blockingClusters.add(provenance);
     }
 
-    boolean lockOwner(Cluster<?> provenance, String recordId) {
-        if (blockingId.containsKey(provenance)) {
-            return blockingId.get(provenance).contains(recordId);
-        } else return false;
+    boolean lockOwner(Cluster<?> provenance) {
+        if(Objects.isNull(blockingClusters))
+            throw new TransactionWasClosedException();
+        return blockingClusters.contains(provenance);
     }
 
     public void commit() {
-        blockingId.forEach((cluster, ids) -> cluster.commit(this, ids));
-        blockingId.clear();
+        if(Objects.isNull(blockingClusters))
+            throw new TransactionWasClosedException();
+        blockingClusters.forEach(Cluster::commit);
+        blockingClusters = null;
+        openTransactions.remove(this);
+        synchronized (mutex) {
+            mutex.notify();
+        }
     }
 
     public void rollback() {
-        blockingId.forEach(((cluster, ids) -> cluster.rollback(this, ids)));
-        blockingId.clear();
+        if(Objects.isNull(blockingClusters))
+            throw new TransactionWasClosedException();
+        blockingClusters.forEach(Cluster::rollback);
+        blockingClusters = null;
+        openTransactions.remove(this);
+        synchronized (mutex) {
+            mutex.notify();
+        }
     }
 
-    protected boolean callingThreadIsDye() {
+    private boolean callingThreadIsDye() {
         return !callingThread.isAlive();
     }
 }

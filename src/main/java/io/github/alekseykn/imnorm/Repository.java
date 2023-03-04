@@ -189,7 +189,7 @@ public abstract class Repository<Record> {
     public Record save(final Record record, final Transaction transaction) {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
-        if (Objects.nonNull(cluster) && cluster.containsKey(id, transaction)) {
+        if (Objects.nonNull(cluster) && cluster.containsKeyFromTransaction(id)) {
             synchronized (this) {
                 cluster.set(id, record, transaction);
             }
