@@ -3,7 +3,6 @@ package io.github.alekseykn.imnorm;
 import io.github.alekseykn.imnorm.exceptions.OtherTransactionRedactCurrentClusterException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
@@ -15,12 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TransactionTest {
-    private static Repository<Dto> repository;
-
-    @BeforeAll
-    static void init() {
-        repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
-    }
+    private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
 
     @AfterEach
     void tearDown() {
