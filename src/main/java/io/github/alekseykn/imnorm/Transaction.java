@@ -40,7 +40,7 @@ public class Transaction {
     }
 
     public static Transaction waitTransaction() {
-        return new Transaction(1000);
+        return new Transaction(250);
     }
 
     public static Transaction blockingTransaction() {
@@ -52,12 +52,12 @@ public class Transaction {
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            return new Transaction(1000);
+            return new Transaction(250);
         }
     }
 
     public static Optional<Exception> executeInWaitTransactionWithReply(final Consumer<Transaction> transactionalCall) {
-        return executeInWaitTransactionWithReply(transactionalCall, 1000);
+        return executeInWaitTransactionWithReply(transactionalCall, 250);
     }
 
     public static Optional<Exception> executeInWaitTransactionWithReply(final Consumer<Transaction> transactionalCall,
