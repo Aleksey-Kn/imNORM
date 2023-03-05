@@ -1,6 +1,6 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.exceptions.MultipleAccessToCluster;
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -47,7 +47,7 @@ class TransactionTest {
 
     @Test
     @SneakyThrows
-    void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitingTransaction() {
+    void saveShouldWorkWithTwoThreadWritingInOneClusterFromBlockingTransaction() {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
@@ -56,12 +56,12 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.blockingTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
         Thread thread2 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.blockingTransaction();
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
@@ -76,7 +76,7 @@ class TransactionTest {
 
     @Test
     @SneakyThrows
-    void saveShouldWorkWithTwoThreadWritingInOneClusterFromRetryingNoWaitTransactions() {
+    void saveShouldWorkWithTwoThreadWritingInOneClusterFromRetryingWaitTransactions() {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
@@ -85,9 +85,9 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() ->
-                Transaction.executeInNoWaitTransactionWithReply(transaction ->
+                Transaction.executeInWaitTransactionWithReply(transaction ->
                         first.forEach(id -> repository.save(new Dto(id), transaction))));
-        Thread thread2 = new Thread(() -> Transaction.executeInNoWaitTransactionWithReply(transaction ->
+        Thread thread2 = new Thread(() -> Transaction.executeInWaitTransactionWithReply(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
         thread2.start();
@@ -100,7 +100,65 @@ class TransactionTest {
 
     @Test
     @SneakyThrows
-    void saveShouldRollbackWhereThrowExceptionFromRetryingNoWaitTransactions() {
+    void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitTransactionsWithoutDeadLock() {
+        Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
+                .limit(50)
+                .collect(Collectors.toSet());
+        Set<Integer> second = Stream.iterate(30, integer -> integer + 1)
+                .limit(50)
+                .collect(Collectors.toSet());
+
+        Thread thread1 = new Thread(() -> {
+            Transaction transaction = Transaction.waitTransaction();
+            first.forEach(id -> repository.save(new Dto(id), transaction));
+            transaction.commit();
+        });
+        Thread thread2 = new Thread(() -> {
+            Transaction transaction = Transaction.waitTransaction();
+            second.forEach(id -> repository.save(new Dto(id), transaction));
+            transaction.commit();
+        });
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+
+        assertThat(repository.findAll().size())
+                .isEqualTo(80);
+    }
+
+    @Test
+    @SneakyThrows
+    void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
+        Set<Integer> first = Stream.iterate(1000, integer -> integer + 1)
+                .limit(100)
+                .collect(Collectors.toSet());
+        Set<Integer> second = Stream.iterate(1060, integer -> integer + 1)
+                .limit(100)
+                .collect(Collectors.toSet());
+
+        Thread thread1 = new Thread(() -> {
+            Transaction transaction = Transaction.waitTransaction(5000);
+            first.forEach(id -> repository.save(new Dto(id), transaction));
+            transaction.commit();
+        });
+        Thread thread2 = new Thread(() -> {
+            Transaction transaction = Transaction.waitTransaction(5000);
+            second.forEach(id -> repository.save(new Dto(id), transaction));
+            transaction.commit();
+        });
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+
+        assertThat(repository.findAll().size())
+                .isEqualTo(160);
+    }
+
+    @Test
+    @SneakyThrows
+    void saveShouldRollbackWhereThrowExceptionFromRetryingWaitTransactions() {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
@@ -108,11 +166,11 @@ class TransactionTest {
                 .limit(100)
                 .collect(Collectors.toSet());
 
-        Thread thread1 = new Thread(() -> Transaction.executeInNoWaitTransactionWithReply(transaction -> {
+        Thread thread1 = new Thread(() -> Transaction.executeInWaitTransactionWithReply(transaction -> {
             first.forEach(id -> repository.save(new Dto(id), transaction));
             throw new RuntimeException("Expected exception");
         }));
-        Thread thread2 = new Thread(() -> Transaction.executeInNoWaitTransactionWithReply(transaction ->
+        Thread thread2 = new Thread(() -> Transaction.executeInWaitTransactionWithReply(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
         thread2.start();
@@ -125,21 +183,21 @@ class TransactionTest {
 
     @Test
     @SneakyThrows
-    void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitingTransactionWithOneRollback() {
-        Set<Integer> first = Stream.iterate(10000, integer -> integer + 1)
+    void saveShouldWorkWithTwoThreadWritingInOneClusterFromBlockingTransactionWithOneRollback() {
+        Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
-        Set<Integer> second = Stream.iterate(20000, integer -> integer + 1)
+        Set<Integer> second = Stream.iterate(1000, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.blockingTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.rollback();
         });
         Thread thread2 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.blockingTransaction();
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
@@ -154,16 +212,16 @@ class TransactionTest {
 
     @Test
     @SneakyThrows
-    void saveShouldThrowExceptionWithTwoThreadWritingInOneClusterFromNoWaitingTransaction() {
+    void saveShouldThrowExceptionWithTwoThreadWritingInOneClusterFromWaitingTransaction() {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(10)
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.noWaitTransaction();
+            Transaction transaction = Transaction.waitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             try {
-                Thread.sleep(1000);
+                Thread.sleep(2000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -173,15 +231,15 @@ class TransactionTest {
         Thread.sleep(500);
 
         assertThatThrownBy(() -> {
-            Transaction transaction = Transaction.noWaitTransaction();
+            Transaction transaction = Transaction.waitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
-        }).isInstanceOf(MultipleAccessToCluster.class);
+        }).isInstanceOf(DeadLockException.class);
     }
 
     @Test
     @SneakyThrows
-    void saveShouldWorkWithTwoThreadWritingInDifferentClusterFromNoWaitingTransaction() {
+    void saveShouldWorkWithTwoThreadWritingInDifferentClusterFromWaitingTransaction() {
         Set<Integer> first = Stream.iterate(10000, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
@@ -191,12 +249,12 @@ class TransactionTest {
         repository.save(new Dto(20000));
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.noWaitTransaction();
+            Transaction transaction = Transaction.waitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         }, "First");
         Thread thread2 = new Thread(() -> {
-            Transaction transaction = Transaction.noWaitTransaction();
+            Transaction transaction = Transaction.waitTransaction();
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         }, "Second");

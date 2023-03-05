@@ -1,7 +1,9 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.exceptions.MultipleAccessToCluster;
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.TransactionWasClosedException;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,32 +35,41 @@ public class Transaction {
         remover.start();
     }
 
-    public static Transaction noWaitTransaction() {
-        return new Transaction();
+    public static Transaction waitTransaction(final int waitBeforeThrowException) {
+        return new Transaction(waitBeforeThrowException);
     }
 
     public static Transaction waitTransaction() {
+        return new Transaction(250);
+    }
+
+    public static Transaction blockingTransaction() {
         synchronized (mutex) {
             try {
                 while (!openTransactions.isEmpty()) {
-                    mutex.wait(1000);
+                    mutex.wait();
                 }
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            return new Transaction();
+            return new Transaction(250);
         }
     }
 
-    public static Optional<Exception> executeInNoWaitTransactionWithReply(Consumer<Transaction> transactionalCall) {
+    public static Optional<Exception> executeInWaitTransactionWithReply(final Consumer<Transaction> transactionalCall) {
+        return executeInWaitTransactionWithReply(transactionalCall, 250);
+    }
+
+    public static Optional<Exception> executeInWaitTransactionWithReply(final Consumer<Transaction> transactionalCall,
+                                                                        final int waitBeforeThrowException) {
         Transaction transaction;
         while (true) {
-            transaction = new Transaction();
+            transaction = new Transaction(waitBeforeThrowException);
             try {
                 transactionalCall.accept(transaction);
                 transaction.commit();
                 return Optional.empty();
-            } catch (MultipleAccessToCluster ignore) {
+            } catch (DeadLockException ignore) {
             } catch (Exception e) {
                 transaction.rollback();
                 return Optional.of(e);
@@ -69,10 +80,13 @@ public class Transaction {
 
     private final Thread callingThread;
     private Set<Cluster<?>> blockingClusters = new HashSet<>();
+    @Getter(value = AccessLevel.PACKAGE)
+    private final int waitTime;
 
-    private Transaction() {
+    private Transaction(final int waitBeforeThrow) {
         callingThread = Thread.currentThread();
         openTransactions.add(this);
+        waitTime = waitBeforeThrow;
     }
 
     void captureLock(Cluster<?> provenance) {

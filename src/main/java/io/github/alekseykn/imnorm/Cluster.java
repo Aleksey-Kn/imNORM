@@ -1,7 +1,7 @@
 package io.github.alekseykn.imnorm;
 
 import com.google.gson.Gson;
-import io.github.alekseykn.imnorm.exceptions.MultipleAccessToCluster;
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -37,8 +37,7 @@ public final class Cluster<Record> {
     }
 
     void set(String key, Record record) {
-        if(Objects.nonNull(copyDataForTransactions))
-            throw new MultipleAccessToCluster(firstKey);
+        waitAndCheckDeadLock();
         redacted = true;
         data.put(key, record);
     }
@@ -49,8 +48,7 @@ public final class Cluster<Record> {
     }
 
     Record get(String key) {
-        if(Objects.nonNull(copyDataForTransactions))
-            throw new MultipleAccessToCluster(firstKey);
+        waitAndCheckDeadLock();
         return data.get(key);
     }
 
@@ -60,8 +58,7 @@ public final class Cluster<Record> {
     }
 
     Collection<Record> findAll() {
-        if(Objects.nonNull(copyDataForTransactions))
-            throw new MultipleAccessToCluster(firstKey);
+        waitAndCheckDeadLock();
         return data.values();
     }
 
@@ -71,8 +68,7 @@ public final class Cluster<Record> {
     }
 
     Record delete(String key) {
-        if(Objects.nonNull(copyDataForTransactions))
-            throw new MultipleAccessToCluster(firstKey);
+        waitAndCheckDeadLock();
         redacted = true;
         return data.remove(key);
     }
@@ -131,14 +127,36 @@ public final class Cluster<Record> {
         }
     }
 
+    private void waitAndCheckDeadLock() {
+        if(Objects.nonNull(copyDataForTransactions)) {
+            synchronized (repository) {
+                try {
+                    repository.wait(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            if(Objects.nonNull(copyDataForTransactions))
+                throw new DeadLockException(firstKey);
+        }
+    }
+
     private void lock(Transaction transaction) {
         if (!transaction.lockOwner(this)) {
-            if (Objects.isNull(copyDataForTransactions)) {
-                copyDataForTransactions = new TreeMap<>(data);
-            } else {
-                transaction.rollback();
-                throw new MultipleAccessToCluster(firstKey);
+            if (Objects.nonNull(copyDataForTransactions)) {
+                synchronized (repository) {
+                    try {
+                        repository.wait(transaction.getWaitTime());
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+                if(Objects.nonNull(copyDataForTransactions)) {
+                    transaction.rollback();
+                    throw new DeadLockException(firstKey);
+                }
             }
+            copyDataForTransactions = new TreeMap<>(data);
             transaction.captureLock(this);
         }
     }
@@ -148,11 +166,17 @@ public final class Cluster<Record> {
             data = copyDataForTransactions;
             copyDataForTransactions = null;
             redacted = true;
+            synchronized (repository) {
+                repository.notify();
+            }
         }
     }
 
     void rollback() {
         copyDataForTransactions = null;
+        synchronized (repository) {
+            repository.notify();
+        }
     }
 
     boolean hasNotOpenTransactions() {
