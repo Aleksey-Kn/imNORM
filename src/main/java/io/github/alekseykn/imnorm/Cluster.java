@@ -1,7 +1,7 @@
 package io.github.alekseykn.imnorm;
 
 import com.google.gson.Gson;
-import io.github.alekseykn.imnorm.exceptions.OtherTransactionRedactCurrentClusterException;
+import io.github.alekseykn.imnorm.exceptions.MultipleAccessToCluster;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -38,7 +38,7 @@ public final class Cluster<Record> {
 
     void set(String key, Record record) {
         if(Objects.nonNull(copyDataForTransactions))
-            throw new OtherTransactionRedactCurrentClusterException(firstKey);
+            throw new MultipleAccessToCluster(firstKey);
         redacted = true;
         data.put(key, record);
     }
@@ -50,7 +50,7 @@ public final class Cluster<Record> {
 
     Record get(String key) {
         if(Objects.nonNull(copyDataForTransactions))
-            throw new OtherTransactionRedactCurrentClusterException(firstKey);
+            throw new MultipleAccessToCluster(firstKey);
         return data.get(key);
     }
 
@@ -61,7 +61,7 @@ public final class Cluster<Record> {
 
     Collection<Record> findAll() {
         if(Objects.nonNull(copyDataForTransactions))
-            throw new OtherTransactionRedactCurrentClusterException(firstKey);
+            throw new MultipleAccessToCluster(firstKey);
         return data.values();
     }
 
@@ -72,7 +72,7 @@ public final class Cluster<Record> {
 
     Record delete(String key) {
         if(Objects.nonNull(copyDataForTransactions))
-            throw new OtherTransactionRedactCurrentClusterException(firstKey);
+            throw new MultipleAccessToCluster(firstKey);
         redacted = true;
         return data.remove(key);
     }
@@ -135,7 +135,10 @@ public final class Cluster<Record> {
         if (!transaction.lockOwner(this)) {
             if (Objects.isNull(copyDataForTransactions)) {
                 copyDataForTransactions = new TreeMap<>(data);
-            } else throw new OtherTransactionRedactCurrentClusterException(firstKey);
+            } else {
+                transaction.rollback();
+                throw new MultipleAccessToCluster(firstKey);
+            }
             transaction.captureLock(this);
         }
     }

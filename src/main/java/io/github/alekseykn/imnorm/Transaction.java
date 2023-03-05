@@ -1,12 +1,11 @@
 package io.github.alekseykn.imnorm;
 
+import io.github.alekseykn.imnorm.exceptions.MultipleAccessToCluster;
 import io.github.alekseykn.imnorm.exceptions.TransactionWasClosedException;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class Transaction {
     private final static Set<Transaction> openTransactions = ConcurrentHashMap.newKeySet();
@@ -48,6 +47,22 @@ public class Transaction {
                 throw new RuntimeException(e);
             }
             return new Transaction();
+        }
+    }
+
+    public static Optional<Exception> executeInNoWaitTransactionWithReply(Consumer<Transaction> transactionalCall) {
+        Transaction transaction;
+        while (true) {
+            transaction = new Transaction();
+            try {
+                transactionalCall.accept(transaction);
+                transaction.commit();
+                return Optional.empty();
+            } catch (MultipleAccessToCluster ignore) {
+            } catch (Exception e) {
+                transaction.rollback();
+                return Optional.of(e);
+            }
         }
     }
 

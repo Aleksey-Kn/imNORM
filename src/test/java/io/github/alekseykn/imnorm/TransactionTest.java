@@ -1,6 +1,6 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.exceptions.OtherTransactionRedactCurrentClusterException;
+import io.github.alekseykn.imnorm.exceptions.MultipleAccessToCluster;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -35,23 +35,26 @@ class TransactionTest {
     void saveShouldWordWithOneTransactionWithRollback() {
         repository.save(new Dto(10));
         repository.save(new Dto(40));
+
         Transaction transaction = Transaction.waitTransaction();
         Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .forEach(id -> repository.save(new Dto(id), transaction));
         transaction.rollback();
+
         assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(10, 40);
     }
 
     @Test
     @SneakyThrows
     void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitingTransaction() {
-        Set<Integer> first = Stream.iterate(10000, integer -> integer + 1)
+        Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
-        Set<Integer> second = Stream.iterate(20000, integer -> integer + 1)
+        Set<Integer> second = Stream.iterate(60, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
+
         Thread thread1 = new Thread(() -> {
             Transaction transaction = Transaction.waitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
@@ -66,8 +69,58 @@ class TransactionTest {
         thread2.start();
         thread1.join();
         thread2.join();
+
         assertThat(repository.findAll().size())
-                .isEqualTo(200);
+                .isEqualTo(160);
+    }
+
+    @Test
+    @SneakyThrows
+    void saveShouldWorkWithTwoThreadWritingInOneClusterFromRetryingNoWaitTransactions() {
+        Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
+                .limit(100)
+                .collect(Collectors.toSet());
+        Set<Integer> second = Stream.iterate(40, integer -> integer + 1)
+                .limit(100)
+                .collect(Collectors.toSet());
+
+        Thread thread1 = new Thread(() ->
+                Transaction.executeInNoWaitTransactionWithReply(transaction ->
+                        first.forEach(id -> repository.save(new Dto(id), transaction))));
+        Thread thread2 = new Thread(() -> Transaction.executeInNoWaitTransactionWithReply(transaction ->
+                second.forEach(id -> repository.save(new Dto(id), transaction))));
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+
+        assertThat(repository.findAll().size())
+                .isEqualTo(140);
+    }
+
+    @Test
+    @SneakyThrows
+    void saveShouldRollbackWhereThrowExceptionFromRetryingNoWaitTransactions() {
+        Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
+                .limit(100)
+                .collect(Collectors.toSet());
+        Set<Integer> second = Stream.iterate(40, integer -> integer + 1)
+                .limit(100)
+                .collect(Collectors.toSet());
+
+        Thread thread1 = new Thread(() -> Transaction.executeInNoWaitTransactionWithReply(transaction -> {
+            first.forEach(id -> repository.save(new Dto(id), transaction));
+            throw new RuntimeException("Expected exception");
+        }));
+        Thread thread2 = new Thread(() -> Transaction.executeInNoWaitTransactionWithReply(transaction ->
+                second.forEach(id -> repository.save(new Dto(id), transaction))));
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+
+        assertThat(repository.findAll().size())
+                .isEqualTo(100);
     }
 
     @Test
@@ -79,6 +132,7 @@ class TransactionTest {
         Set<Integer> second = Stream.iterate(20000, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
+
         Thread thread1 = new Thread(() -> {
             Transaction transaction = Transaction.waitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
@@ -93,6 +147,7 @@ class TransactionTest {
         thread2.start();
         thread1.join();
         thread2.join();
+
         assertThat(repository.findAll().size())
                 .isEqualTo(100);
     }
@@ -103,6 +158,7 @@ class TransactionTest {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(10)
                 .collect(Collectors.toSet());
+
         Thread thread1 = new Thread(() -> {
             Transaction transaction = Transaction.noWaitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
@@ -115,11 +171,12 @@ class TransactionTest {
         });
         thread1.start();
         Thread.sleep(500);
+
         assertThatThrownBy(() -> {
             Transaction transaction = Transaction.noWaitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
-        }).isInstanceOf(OtherTransactionRedactCurrentClusterException.class);
+        }).isInstanceOf(MultipleAccessToCluster.class);
     }
 
     @Test
@@ -132,6 +189,7 @@ class TransactionTest {
                 .limit(99)
                 .collect(Collectors.toSet());
         repository.save(new Dto(20000));
+
         Thread thread1 = new Thread(() -> {
             Transaction transaction = Transaction.noWaitTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
@@ -146,6 +204,7 @@ class TransactionTest {
         thread2.start();
         thread1.join();
         thread2.join();
+
         assertThat(repository.findAll().size()).isEqualTo(200);
     }
 }
