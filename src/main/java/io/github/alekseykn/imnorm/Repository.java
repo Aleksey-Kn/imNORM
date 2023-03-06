@@ -13,12 +13,13 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import java.util.function.Function;
 
 /**
  * Provides an interface for manipulating with entity current type.
  * The whole collection split on clusters, through which direct access to data is carried out.
+ *
  * @param <Record> Type of data entity
  * @author Aleksey-Kn
  */
@@ -70,7 +71,8 @@ public abstract class Repository<Record> {
 
     /**
      * Analyse data entity type and create directory for clusters
-     * @param type Type of data entity
+     *
+     * @param type      Type of data entity
      * @param directory The directory where the clusters are saved
      */
     protected Repository(final Class<Record> type, final File directory) {
@@ -111,6 +113,7 @@ public abstract class Repository<Record> {
 
     /**
      * Create and set id needed type for current record
+     *
      * @param record Record, which needed create id
      * @return Created id
      */
@@ -133,6 +136,7 @@ public abstract class Repository<Record> {
 
     /**
      * Find cluster, which can contain record with current id
+     *
      * @param id Record id, for which execute search
      * @return Cluster, which can contain current record
      */
@@ -140,72 +144,76 @@ public abstract class Repository<Record> {
 
     /**
      * Add new record to data storage
-     * @param id String interpretation of id
+     *
+     * @param id     String interpretation of id
      * @param record The record being added to data storage
-     * @return Inputted record, if auto-generate off; record with new id, if auto-generate on
+     * @throws DeadLockException Current record lock from other transaction
      */
-    protected abstract Record create(String id, Record record);
+    protected abstract void create(String id, Record record);
 
     /**
      * Add new record to data storage in current transaction
-     * @param id String interpretation of id
-     * @param record The record being added to data storage
+     *
+     * @param id          String interpretation of id
+     * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
-     * @return Inputted record, if auto-generate off; record with new id, if auto-generate on
+     * @throws DeadLockException Current record lock from other transaction
      */
-    protected abstract Record create(String id, Record record, Transaction transaction);
+    protected abstract void create(String id, Record record, Transaction transaction);
 
     /**
      * Add new record if record with current id not exist in data storage.
      * Update record if current id exist in data storage.
+     *
      * @param record Record for save
      * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
      * else return inputted record
+     * @throws DeadLockException Current record lock from other transaction
      */
-    public Record save(final Record record) {
+    public synchronized Record save(final Record record) {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
-            synchronized (this) {
-                cluster.set(id, record);
-            }
-            return record;
+            cluster.set(id, record);
         } else {
-            if(needGenerateId) {
+            if (needGenerateId) {
                 id = generateAndSetIdForRecord(record);
             }
-            return create(id, record);
+            create(id, record);
         }
+        return record;
     }
 
     /**
      * Add new record if record with current id not exist in data storage.
      * Update record if current id exist in data storage. Changes execute in current transaction.
-     * @param record Record for save
+     *
+     * @param record      Record for save
      * @param transaction Transaction, in which execute save
      * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
      * else return inputted record
+     * @throws DeadLockException Current record lock from other transaction
      */
-    public Record save(final Record record, final Transaction transaction) {
+    public synchronized Record save(final Record record, final Transaction transaction) {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKeyFromTransaction(id)) {
-            synchronized (this) {
-                cluster.set(id, record, transaction);
-            }
-            return record;
+            cluster.set(id, record, transaction);
         } else {
-            if(needGenerateId) {
+            if (needGenerateId) {
                 id = generateAndSetIdForRecord(record);
             }
-            return create(id, record, transaction);
+            create(id, record, transaction);
         }
+        return record;
     }
 
     /**
      * Find record with current id
+     *
      * @param id Id of the record being searched
      * @return Found record
+     * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Record findById(final Object id) {
         String realId = String.valueOf(id);
@@ -214,9 +222,11 @@ public abstract class Repository<Record> {
 
     /**
      * Find record with current id
-     * @param id Id of the record being searched
+     *
+     * @param id          Id of the record being searched
      * @param transaction Transaction, in which execute find
      * @return Found record
+     * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Record findById(Object id, Transaction transaction) {
         String realId = String.valueOf(id);
@@ -225,52 +235,84 @@ public abstract class Repository<Record> {
 
     /**
      * Find all records in current repository
+     *
      * @return All records, contains in current repository
+     * @throws DeadLockException Current record lock from other transaction
      */
     public abstract Set<Record> findAll();
 
     /**
      * Find all records in current repository with current transaction
+     *
      * @param transaction Transaction, in which execute find
      * @return All records, contains in current transaction
+     * @throws DeadLockException Current record lock from other transaction
      */
     public abstract Set<Record> findAll(Transaction transaction);
 
     /**
-     * Find all records with pagination in current repository
+     * Find all records with pagination in this repository
+     *
      * @param startIndex Quantity skipped records from start collection
-     * @param rowCount Record quantity, which need return
+     * @param rowCount   Record quantity, which need return
      * @return All record, contains in current diapason
+     * @throws DeadLockException Current record lock from other transaction
      */
     public abstract Set<Record> findAll(int startIndex, int rowCount);
 
     /**
      * Find all records with pagination in current repository with current transaction
-     * @param startIndex Quantity skipped records from start collection
-     * @param rowCount Record quantity, which need return
+     *
+     * @param startIndex  Quantity skipped records from start collection
+     * @param rowCount    Record quantity, which need return
      * @param transaction Transaction, in which execute find
      * @return All record, contains in current transaction in current diapason
+     * @throws DeadLockException Current record lock from other transaction
      */
     public abstract Set<Record> findAll(int startIndex, int rowCount, Transaction transaction);
 
     /**
-     * Remove record with current id
+     * Remove record with current id. If current cluster becomes empty it is deleted.
+     *
      * @param id Id of the record being deleted
-     * @return Record, which was deleted from repository
+     * @return Record, which was deleted from repository, or null, if specified record not exist
+     * @throws DeadLockException Current record lock from other transaction
      */
-    public abstract Record deleteById(Object id);
+    public synchronized Record deleteById(final Object id) {
+        String realId = String.valueOf(id);
+        Cluster<Record> cluster = findCurrentClusterFromId(realId);
+        if (Objects.isNull(cluster)) {
+            return null;
+        }
+        Record record = cluster.delete(realId);
+        deleteClusterIfNeed(cluster);
+        return record;
+    }
 
     /**
      * Remove record with current id in current transaction
-     * @param id Id of the record being deleted
-     * @return Record, which was deleted from repository in current transaction
+     *
+     * @param id          Id of the record being deleted
+     * @param transaction Transaction, in which execute delete
+     * @return Record, which was deleted from repository in current transaction, or null,
+     * if specified record not exist in current transaction
+     * @throws DeadLockException Current record lock from other transaction
      */
-    public abstract Record deleteById(Object id, Transaction transaction);
+    public synchronized Record deleteById(final Object id, final Transaction transaction) {
+        String realId = String.valueOf(id);
+        Cluster<Record> cluster = findCurrentClusterFromId(realId);
+        if (Objects.isNull(cluster)) {
+            return null;
+        }
+        return cluster.delete(realId, transaction);
+    }
 
     /**
      * Remove current record
+     *
      * @param record Record being deleted
-     * @return Record, which was deleted
+     * @return Record, which was deleted, or null, where specified record not exist
+     * @throws DeadLockException Current record lock from other transaction
      */
     public Record delete(final Record record) {
         return deleteById(getIdFromRecord.apply(record));
@@ -278,19 +320,24 @@ public abstract class Repository<Record> {
 
     /**
      * Remove record in current transaction
+     *
      * @param record Record being deleted
-     * @return Record, which was deleted in current transaction
+     * @return Record, which was deleted in current transaction, or null,
+     * where specified record not exist in current transaction
+     * @throws DeadLockException Current record lock from other transaction
      */
     public Record delete(final Record record, final Transaction transaction) {
         return deleteById(getIdFromRecord.apply(record), transaction);
     }
 
     /**
-     * Clear current repository
+     * Clear current repository from file system and RAM
+     *
+     * @throws DeadLockException Current record lock from other transaction
      */
     public void deleteAll() {
-        for(File file: Objects.requireNonNull(directory.listFiles())) {
-            if(!file.delete())
+        for (File file : Objects.requireNonNull(directory.listFiles())) {
+            if (!file.delete())
                 throw new InternalImnormException(file.getAbsolutePath() + ".delete()");
         }
     }
@@ -299,4 +346,18 @@ public abstract class Repository<Record> {
      * Save data from current repository to file system
      */
     public abstract void flush();
+
+    /**
+     * Checks if the cluster needs to be split and splits it if necessary
+     *
+     * @param cluster The cluster being checked
+     */
+    protected abstract void splitClusterIfNeed(Cluster<Record> cluster);
+
+    /**
+     * Check if the cluster needs to be deleted and delete it if necessary
+     *
+     * @param cluster The cluster being deleted
+     */
+    protected abstract void deleteClusterIfNeed(Cluster<Record> cluster);
 }
