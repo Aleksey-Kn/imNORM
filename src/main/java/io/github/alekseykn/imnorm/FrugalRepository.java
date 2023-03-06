@@ -248,7 +248,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Set<Record> findAll(int startIndex, int rowCount, final Transaction transaction) {
+    public synchronized Set<Record> findAll(int startIndex, int rowCount, final Transaction transaction) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
@@ -320,7 +320,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Record deleteById(final Object id, final Transaction transaction) {
+    public synchronized Record deleteById(final Object id, final Transaction transaction) {
         String realId = String.valueOf(id);
         Cluster<Record> cluster = findCurrentClusterFromId(realId);
         if (Objects.isNull(cluster)) {
@@ -335,7 +335,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public void deleteAll() {
+    public synchronized void deleteAll() {
         super.deleteAll();
         clusterNames.clear();
         openClusters.clear();
