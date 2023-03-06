@@ -9,9 +9,28 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+/**
+ * Allows you to implement transactional behavior.
+ * Allows you to avoid loss of data integrity during operations and be able to effectively roll back the changes made.
+ * During an active transaction,
+ * the data clusters accessed by the current transaction are blocked from all other transactions.
+ * Implemented blocking and waiting transactions.
+ * A blocking transaction waits for all other transactions to complete before starting its own.
+ * Using only a blocking transaction ensures that no exception is thrown.
+ * Waiting transactions will try to run in parallel. When accessing a cluster captured by another transaction,
+ * the transaction will wait for it to be unlocked and, if the waiting time is too long, it will throw an exception.
+ *
+ * @author Aleksey-Kn
+ */
 public class Transaction {
+    /**
+     * Set of open transaction need for auto-rollback transactions whose thread is no longer active
+     */
     private final static Set<Transaction> openTransactions = ConcurrentHashMap.newKeySet();
 
+    /**
+     * An object to implement the waiting when creating blocking transaction
+     */
     private final static Object mutex = new Object();
 
     static {
@@ -35,11 +54,11 @@ public class Transaction {
         remover.start();
     }
 
-    public static Transaction waitTransaction(final int waitBeforeThrowException) {
+    public static Transaction waitingTransaction(final int waitBeforeThrowException) {
         return new Transaction(waitBeforeThrowException);
     }
 
-    public static Transaction waitTransaction() {
+    public static Transaction waitingTransaction() {
         return new Transaction(250);
     }
 
@@ -56,12 +75,12 @@ public class Transaction {
         }
     }
 
-    public static Optional<Exception> executeInWaitTransactionWithReply(final Consumer<Transaction> transactionalCall) {
-        return executeInWaitTransactionWithReply(transactionalCall, 250);
+    public static Optional<Exception> executeInWaitingTransactionWithReply(final Consumer<Transaction> transactionalCall) {
+        return executeInWaitingTransactionWithReply(transactionalCall, 250);
     }
 
-    public static Optional<Exception> executeInWaitTransactionWithReply(final Consumer<Transaction> transactionalCall,
-                                                                        final int waitBeforeThrowException) {
+    public static Optional<Exception> executeInWaitingTransactionWithReply(final Consumer<Transaction> transactionalCall,
+                                                                           final int waitBeforeThrowException) {
         Transaction transaction;
         while (true) {
             transaction = new Transaction(waitBeforeThrowException);
@@ -90,19 +109,19 @@ public class Transaction {
     }
 
     void captureLock(Cluster<?> provenance) {
-        if(Objects.isNull(blockingClusters))
+        if (Objects.isNull(blockingClusters))
             throw new TransactionWasClosedException();
         blockingClusters.add(provenance);
     }
 
     boolean lockOwner(Cluster<?> provenance) {
-        if(Objects.isNull(blockingClusters))
+        if (Objects.isNull(blockingClusters))
             throw new TransactionWasClosedException();
         return blockingClusters.contains(provenance);
     }
 
     public void commit() {
-        if(Objects.isNull(blockingClusters))
+        if (Objects.isNull(blockingClusters))
             throw new TransactionWasClosedException();
         blockingClusters.forEach(Cluster::commit);
         blockingClusters = null;
@@ -113,7 +132,7 @@ public class Transaction {
     }
 
     public void rollback() {
-        if(Objects.isNull(blockingClusters))
+        if (Objects.isNull(blockingClusters))
             throw new TransactionWasClosedException();
         blockingClusters.forEach(Cluster::rollback);
         blockingClusters = null;

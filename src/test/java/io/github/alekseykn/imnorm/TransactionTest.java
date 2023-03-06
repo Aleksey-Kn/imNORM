@@ -23,7 +23,7 @@ class TransactionTest {
 
     @Test
     void saveShouldWordWithOneTransaction() {
-        Transaction transaction = Transaction.waitTransaction();
+        Transaction transaction = Transaction.waitingTransaction();
         Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .forEach(id -> repository.save(new Dto(id), transaction));
@@ -36,7 +36,7 @@ class TransactionTest {
         repository.save(new Dto(10));
         repository.save(new Dto(40));
 
-        Transaction transaction = Transaction.waitTransaction();
+        Transaction transaction = Transaction.waitingTransaction();
         Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .forEach(id -> repository.save(new Dto(id), transaction));
@@ -85,9 +85,9 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() ->
-                Transaction.executeInWaitTransactionWithReply(transaction ->
+                Transaction.executeInWaitingTransactionWithReply(transaction ->
                         first.forEach(id -> repository.save(new Dto(id), transaction))));
-        Thread thread2 = new Thread(() -> Transaction.executeInWaitTransactionWithReply(transaction ->
+        Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
         thread2.start();
@@ -109,12 +109,12 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.waitingTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
         Thread thread2 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.waitingTransaction();
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
@@ -138,12 +138,12 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction(5000);
+            Transaction transaction = Transaction.waitingTransaction(5000);
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
         Thread thread2 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction(5000);
+            Transaction transaction = Transaction.waitingTransaction(5000);
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         });
@@ -166,11 +166,11 @@ class TransactionTest {
                 .limit(100)
                 .collect(Collectors.toSet());
 
-        Thread thread1 = new Thread(() -> Transaction.executeInWaitTransactionWithReply(transaction -> {
+        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction -> {
             first.forEach(id -> repository.save(new Dto(id), transaction));
             throw new RuntimeException("Expected exception");
         }));
-        Thread thread2 = new Thread(() -> Transaction.executeInWaitTransactionWithReply(transaction ->
+        Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
         thread2.start();
@@ -218,7 +218,7 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.waitingTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             try {
                 Thread.sleep(2000);
@@ -231,7 +231,7 @@ class TransactionTest {
         Thread.sleep(500);
 
         assertThatThrownBy(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.waitingTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         }).isInstanceOf(DeadLockException.class);
@@ -249,12 +249,12 @@ class TransactionTest {
         repository.save(new Dto(20000));
 
         Thread thread1 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.waitingTransaction();
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         }, "First");
         Thread thread2 = new Thread(() -> {
-            Transaction transaction = Transaction.waitTransaction();
+            Transaction transaction = Transaction.waitingTransaction();
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
         }, "Second");
