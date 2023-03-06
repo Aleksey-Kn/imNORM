@@ -163,7 +163,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     /**
      * Find all data, contains in this repository with current transaction
      *
-     * @param transaction Transaction, in which execute save
+     * @param transaction Transaction, in which execute find
      * @return All record, contains in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
