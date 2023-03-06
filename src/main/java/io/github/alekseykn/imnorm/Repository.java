@@ -13,7 +13,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import java.util.function.Function;
 
 /**

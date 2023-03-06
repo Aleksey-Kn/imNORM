@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 
 /**
  * Repository with partial unloading clusters in RAM
