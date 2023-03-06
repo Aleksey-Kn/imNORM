@@ -50,7 +50,7 @@ public final class Cluster<Record> {
      * @param map   Record collection
      * @param owner Repository, to which belongs this cluster
      */
-    Cluster(TreeMap<String, Record> map, Repository<Record> owner) {
+    Cluster(final TreeMap<String, Record> map, final Repository<Record> owner) {
         data = map;
         repository = owner;
         firstKey = data.firstKey();
@@ -63,7 +63,7 @@ public final class Cluster<Record> {
      * @param record Current record for save in cluster
      * @param owner  Repository, to which belongs this cluster
      */
-    Cluster(String id, Record record, Repository<Record> owner) {
+    Cluster(final String id, Record record, final Repository<Record> owner) {
         data.put(id, record);
         repository = owner;
         firstKey = id;
@@ -77,7 +77,7 @@ public final class Cluster<Record> {
      * @param owner       Repository, to which belongs this cluster
      * @param transaction The transaction to which this record will belong
      */
-    Cluster(String id, Record record, Repository<Record> owner, Transaction transaction) {
+    Cluster(final String id, final Record record, final Repository<Record> owner, final Transaction transaction) {
         copyDataForTransactions = new TreeMap<>();
         copyDataForTransactions.put(id, record);
         repository = owner;
@@ -93,7 +93,7 @@ public final class Cluster<Record> {
      * @param record Record, which will be put on current string identifier
      * @throws DeadLockException Current record lock from other transaction
      */
-    void set(String key, Record record) {
+    void set(final String key, final Record record) {
         waitAndCheckDeadLock();
         redacted = true;
         data.put(key, record);
@@ -107,7 +107,7 @@ public final class Cluster<Record> {
      * @param transaction Transaction, in which execute setting
      * @throws DeadLockException Current record lock from other transaction
      */
-    void set(String key, Record record, Transaction transaction) {
+    void set(final String key, final Record record, final Transaction transaction) {
         lock(transaction);
         copyDataForTransactions.put(key, record);
     }
@@ -119,7 +119,7 @@ public final class Cluster<Record> {
      * @return Found record or null, if record with current key not exists
      * @throws DeadLockException Current record lock from other transaction
      */
-    Record get(String key) {
+    Record get(final String key) {
         waitAndCheckDeadLock();
         return data.get(key);
     }
@@ -132,7 +132,7 @@ public final class Cluster<Record> {
      * @return Found record or null, if record with current key not exists
      * @throws DeadLockException Current record lock from other transaction
      */
-    Record get(String key, Transaction transaction) {
+    Record get(final String key, final Transaction transaction) {
         lock(transaction);
         return copyDataForTransactions.get(key);
     }
@@ -155,7 +155,7 @@ public final class Cluster<Record> {
      * @return All record from this cluster in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    Collection<Record> findAll(Transaction transaction) {
+    Collection<Record> findAll(final Transaction transaction) {
         lock(transaction);
         return copyDataForTransactions.values();
     }
@@ -167,7 +167,7 @@ public final class Cluster<Record> {
      * @return Deleted record or null, if string identifier not exists
      * @throws DeadLockException Current record lock from other transaction
      */
-    Record delete(String key) {
+    Record delete(final String key) {
         waitAndCheckDeadLock();
         Record record = data.remove(key);
         if (Objects.nonNull(record))
@@ -183,7 +183,7 @@ public final class Cluster<Record> {
      * @return Deleted record or null, if string identifier not exists
      * @throws DeadLockException Current record lock from other transaction
      */
-    Record delete(String key, Transaction transaction) {
+    Record delete(final String key, final Transaction transaction) {
         lock(transaction);
         return copyDataForTransactions.remove(key);
     }
@@ -208,7 +208,7 @@ public final class Cluster<Record> {
      * @param key String identifier
      * @return True if cluster contains records with current string identifier
      */
-    boolean containsKey(String key) {
+    boolean containsKey(final String key) {
         return data.containsKey(key);
     }
 
@@ -218,7 +218,7 @@ public final class Cluster<Record> {
      * @param key String identifier
      * @return True if cluster contains records with current string identifier in current transaction
      */
-    boolean containsKeyFromTransaction(String key) {
+    boolean containsKeyFromTransaction(final String key) {
         return Objects.nonNull(copyDataForTransactions)
                 ? copyDataForTransactions.containsKey(key)
                 : data.containsKey(key);
@@ -265,7 +265,7 @@ public final class Cluster<Record> {
      * @param toFile File for write records
      * @param parser Object for parse record to string
      */
-    void flush(File toFile, Gson parser) {
+    void flush(final File toFile, final Gson parser) {
         if (redacted) {
             try (PrintWriter printWriter = new PrintWriter(toFile)) {
                 findAll().forEach(record -> printWriter.println(parser.toJson(record)));
@@ -305,7 +305,7 @@ public final class Cluster<Record> {
      *
      * @param transaction A transaction that checks or tries to get a lock
      */
-    private void lock(Transaction transaction) {
+    private void lock(final Transaction transaction) {
         if (!transaction.lockOwner(this)) {
             if (Objects.nonNull(copyDataForTransactions)) {
                 synchronized (repository) {
