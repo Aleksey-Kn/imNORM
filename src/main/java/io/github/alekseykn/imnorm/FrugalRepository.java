@@ -95,12 +95,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             Cluster<Record> currentCluster = findCurrentClusterFromId(id);
             assert currentCluster != null;
             currentCluster.set(id, record);
-            if (currentCluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
-                Cluster<Record> newCluster = currentCluster.split();
-                String firstKeyNewCluster = newCluster.getFirstKey();
-                openClusters.put(firstKeyNewCluster, newCluster);
-                clusterNames.add(firstKeyNewCluster);
-            }
+            splitClusterIfNeed(currentCluster);
         }
         checkAndDrop();
     }
@@ -284,52 +279,6 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     /**
-     * Remove record with current id. If current cluster becomes empty it is deleted.
-     *
-     * @param id Id of the record being deleted
-     * @return Record, which was deleted from repository, or null, if specified record not exist
-     * @throws DeadLockException Current record lock from other transaction
-     */
-    @Override
-    public synchronized Record deleteById(final Object id) {
-        String realId = String.valueOf(id);
-        Cluster<Record> cluster = findCurrentClusterFromId(realId);
-        if (Objects.isNull(cluster)) {
-            return null;
-        }
-        Record record = cluster.delete(realId);
-        try {
-            if (cluster.isEmpty()) {
-                Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
-                clusterNames.remove(cluster.getFirstKey());
-                openClusters.remove(cluster.getFirstKey());
-            }
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
-        }
-        return record;
-    }
-
-    /**
-     * Remove record with current id in current transaction
-     *
-     * @param id Id of the record being deleted
-     * @param transaction Transaction, in which execute delete
-     * @return Record, which was deleted from repository in current transaction, or null,
-     * if specified record not exist in current transaction
-     * @throws DeadLockException Current record lock from other transaction
-     */
-    @Override
-    public synchronized Record deleteById(final Object id, final Transaction transaction) {
-        String realId = String.valueOf(id);
-        Cluster<Record> cluster = findCurrentClusterFromId(realId);
-        if (Objects.isNull(cluster)) {
-            return null;
-        }
-        return cluster.delete(realId, transaction);
-    }
-
-    /**
      * Clear current repository from file system and RAM
      *
      * @throws DeadLockException Current record lock from other transaction
@@ -375,6 +324,29 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                     break;
                 }
             }
+        }
+    }
+
+    @Override
+    protected void splitClusterIfNeed(Cluster<Record> cluster) {
+        if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
+            Cluster<Record> newCluster = cluster.split();
+            String firstKeyNewCluster = newCluster.getFirstKey();
+            openClusters.put(firstKeyNewCluster, newCluster);
+            clusterNames.add(firstKeyNewCluster);
+        }
+    }
+
+    @Override
+    protected void deleteClusterIfNeed(Cluster<Record> cluster) {
+        try {
+            if (cluster.isEmpty()) {
+                Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
+                clusterNames.remove(cluster.getFirstKey());
+                openClusters.remove(cluster.getFirstKey());
+            }
+        } catch (IOException e) {
+            throw new InternalImnormException(e);
         }
     }
 }
