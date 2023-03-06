@@ -43,7 +43,8 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         this.maxClustersQuantity = maxClustersQuantity;
         assert maxClustersQuantity > 1;
         openClusters = new LinkedHashMap<>(maxClustersQuantity + 1);
-        clusterNames.addAll(Arrays.asList(Objects.requireNonNull(directory.list())));
+        clusterNames.addAll(Arrays.asList(Objects.requireNonNull(directory.list((dir, name) ->
+                !name.equals("_sequence.imnorm")))));
     }
 
     /**
