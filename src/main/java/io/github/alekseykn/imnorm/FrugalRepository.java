@@ -110,6 +110,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      *
      * @param id     String interpretation of id
      * @param record The record being added to data storage
+     * @param transaction Transaction, in which execute create
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
@@ -313,6 +314,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      * Remove record with current id in current transaction
      *
      * @param id Id of the record being deleted
+     * @param transaction Transaction, in which execute delete
      * @return Record, which was deleted from repository in current transaction, or null,
      * if specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
