@@ -8,25 +8,75 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
 
+/**
+ * Block for keeping records. All clusters correspond to some files from the file data storage.
+ * The cluster monitors the changes of its data to track the need for overwriting to disk.
+ * Clusters realise transactional behavior: if a transaction affects the current cluster,
+ * it creates a copy of its data for later use as the main data in the case of a commit.
+ *
+ * @param <Record> Type of entity for this cluster
+ * @author Aleksey-Kn
+ */
 public final class Cluster<Record> {
+    /**
+     * Repository, to which belongs this cluster
+     */
     private final Repository<Record> repository;
+
+    /**
+     * Copy of records for transactional call. Will be written as basic data in case commit transaction,
+     * will be dropped in case rollback transaction.
+     */
     private TreeMap<String, Record> copyDataForTransactions = null;
+
+    /**
+     * Indicator of changes in the cluster. It is needed for tracking the need to write to disk.
+     */
     private boolean redacted = true;
+
+    /**
+     * Matching records and their string identifier
+     */
     private TreeMap<String, Record> data = new TreeMap<>();
+
+    /**
+     * The minimum identifier allowed for storage in this cluster
+     */
     private final String firstKey;
 
+    /**
+     * Create cluster with current records collection
+     *
+     * @param map   Record collection
+     * @param owner Repository, to which belongs this cluster
+     */
     Cluster(TreeMap<String, Record> map, Repository<Record> owner) {
         data = map;
         repository = owner;
         firstKey = data.firstKey();
     }
 
+    /**
+     * Create cluster with current record
+     *
+     * @param id     String identifier, appropriate current record
+     * @param record Current record for save in cluster
+     * @param owner  Repository, to which belongs this cluster
+     */
     Cluster(String id, Record record, Repository<Record> owner) {
         data.put(id, record);
         repository = owner;
         firstKey = id;
     }
 
+    /**
+     * Create cluster with current record in current transaction
+     *
+     * @param id          String identifier, appropriate current record
+     * @param record      Current record for save in cluster
+     * @param owner       Repository, to which belongs this cluster
+     * @param transaction The transaction to which this record will belong
+     */
     Cluster(String id, Record record, Repository<Record> owner, Transaction transaction) {
         copyDataForTransactions = new TreeMap<>();
         copyDataForTransactions.put(id, record);
@@ -36,70 +86,163 @@ public final class Cluster<Record> {
         transaction.captureLock(this);
     }
 
+    /**
+     * Add or update record on string identifier and marks the cluster as modified
+     *
+     * @param key    String identifier
+     * @param record Record, which will be put on current string identifier
+     * @throws DeadLockException Current record lock from other transaction
+     */
     void set(String key, Record record) {
         waitAndCheckDeadLock();
         redacted = true;
         data.put(key, record);
     }
 
+    /**
+     * Add or update record on string identifier in current transaction
+     *
+     * @param key         String identifier
+     * @param record      Record, which will be put on current string identifier
+     * @param transaction Transaction, in which execute setting
+     * @throws DeadLockException Current record lock from other transaction
+     */
     void set(String key, Record record, Transaction transaction) {
         lock(transaction);
         copyDataForTransactions.put(key, record);
     }
 
+    /**
+     * Find record on string identifier
+     *
+     * @param key String identifier
+     * @return Found record or null, if record with current key not exists
+     * @throws DeadLockException Current record lock from other transaction
+     */
     Record get(String key) {
         waitAndCheckDeadLock();
         return data.get(key);
     }
 
+    /**
+     * Find record on string identifier
+     *
+     * @param key         String identifier
+     * @param transaction Transaction, in which execute find
+     * @return Found record or null, if record with current key not exists
+     * @throws DeadLockException Current record lock from other transaction
+     */
     Record get(String key, Transaction transaction) {
         lock(transaction);
         return copyDataForTransactions.get(key);
     }
 
+    /**
+     * Find all record from this cluster
+     *
+     * @return All record from this cluster
+     * @throws DeadLockException Current record lock from other transaction
+     */
     Collection<Record> findAll() {
         waitAndCheckDeadLock();
         return data.values();
     }
 
+    /**
+     * Find all record from this cluster in current transaction
+     *
+     * @param transaction Transaction, in which execute find
+     * @return All record from this cluster in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
     Collection<Record> findAll(Transaction transaction) {
         lock(transaction);
         return copyDataForTransactions.values();
     }
 
+    /**
+     * Delete record on string identifier and marks the cluster as modified, if the record existed
+     *
+     * @param key String identifier
+     * @return Deleted record or null, if string identifier not exists
+     * @throws DeadLockException Current record lock from other transaction
+     */
     Record delete(String key) {
         waitAndCheckDeadLock();
-        redacted = true;
-        return data.remove(key);
+        Record record = data.remove(key);
+        if (Objects.nonNull(record))
+            redacted = true;
+        return record;
     }
 
+    /**
+     * Delete record on string identifier in current transactional
+     *
+     * @param key         String identifier
+     * @param transaction Transaction, in which execute delete
+     * @return Deleted record or null, if string identifier not exists
+     * @throws DeadLockException Current record lock from other transaction
+     */
     Record delete(String key, Transaction transaction) {
         lock(transaction);
         return copyDataForTransactions.remove(key);
     }
 
+    /**
+     * @return Quantity record in this cluster
+     */
     int size() {
         return data.size();
     }
 
+    /**
+     * @return Quantity record in this cluster in current transaction
+     */
+    int sizeWithTransaction() {
+        return copyDataForTransactions.size();
+    }
+
+    /**
+     * Checking the contents of a record records with current string identifier
+     *
+     * @param key String identifier
+     * @return True if cluster contains records with current string identifier
+     */
     boolean containsKey(String key) {
         return data.containsKey(key);
     }
 
+    /**
+     * Checking the contents of a record with current string identifier in current transaction
+     *
+     * @param key String identifier
+     * @return True if cluster contains records with current string identifier in current transaction
+     */
     boolean containsKeyFromTransaction(String key) {
         return Objects.nonNull(copyDataForTransactions)
                 ? copyDataForTransactions.containsKey(key)
                 : data.containsKey(key);
     }
 
+    /**
+     * @return The minimum identifier allowed for storage in this cluster
+     */
     String getFirstKey() {
         return firstKey;
     }
 
+    /**
+     * @return True if cluster not contains records
+     */
     boolean isEmpty() {
         return data.isEmpty();
     }
 
+    /**
+     * Separates half of the records of the current cluster into a new cluster. Used for maximum cluster size limits.
+     *
+     * @return New cluster, in which a part of the records of the current cluster was taken out
+     */
     Cluster<Record> split() {
         TreeMap<String, Record> newClusterData = new TreeMap<>();
         int counter = 0;
@@ -116,6 +259,12 @@ public final class Cluster<Record> {
         return new Cluster<>(newClusterData, repository);
     }
 
+    /**
+     * Save to file data storage records from this cluster
+     *
+     * @param toFile File for write records
+     * @param parser Object for parse record to string
+     */
     void flush(File toFile, Gson parser) {
         if (redacted) {
             try (PrintWriter printWriter = new PrintWriter(toFile)) {
@@ -127,8 +276,14 @@ public final class Cluster<Record> {
         }
     }
 
+    /**
+     * Checks for interaction with this cluster from other transactions.
+     * If it exists, it waits for it to end and throws an error if the wait has exceeded the maximum allowed time.
+     *
+     * @throws DeadLockException The maximum waiting time has been exceeded
+     */
     private void waitAndCheckDeadLock() {
-        if(Objects.nonNull(copyDataForTransactions)) {
+        if (Objects.nonNull(copyDataForTransactions)) {
             synchronized (repository) {
                 try {
                     repository.wait(1000);
@@ -136,11 +291,20 @@ public final class Cluster<Record> {
                     throw new RuntimeException(e);
                 }
             }
-            if(Objects.nonNull(copyDataForTransactions))
+            if (Objects.nonNull(copyDataForTransactions))
                 throw new DeadLockException(firstKey);
         }
     }
 
+    /**
+     * Checks whether the current transaction owns this cluster.
+     * If he does not own, checks for interaction with this cluster from other transactions.
+     * If it not exists, transaction captures this cluster.
+     * If it exists, it waits for it to end.
+     * Rollback transaction and throws an error if the wait has exceeded the maximum allowed time.
+     *
+     * @param transaction A transaction that checks or tries to get a lock
+     */
     private void lock(Transaction transaction) {
         if (!transaction.lockOwner(this)) {
             if (Objects.nonNull(copyDataForTransactions)) {
@@ -151,7 +315,7 @@ public final class Cluster<Record> {
                         throw new RuntimeException(e);
                     }
                 }
-                if(Objects.nonNull(copyDataForTransactions)) {
+                if (Objects.nonNull(copyDataForTransactions)) {
                     transaction.rollback();
                     throw new DeadLockException(firstKey);
                 }
@@ -161,17 +325,25 @@ public final class Cluster<Record> {
         }
     }
 
+    /**
+     * Saving changes made in a transaction and subsequent checking of the cluster for emptiness or overcrowding
+     */
     void commit() {
         if (Objects.nonNull(copyDataForTransactions)) {
             data = copyDataForTransactions;
             copyDataForTransactions = null;
             redacted = true;
             synchronized (repository) {
+                repository.splitClusterIfNeed(this);
+                repository.deleteClusterIfNeed(this);
                 repository.notify();
             }
         }
     }
 
+    /**
+     * Canceling changes made in a transaction
+     */
     void rollback() {
         copyDataForTransactions = null;
         synchronized (repository) {
@@ -179,6 +351,9 @@ public final class Cluster<Record> {
         }
     }
 
+    /**
+     * @return True, if cluster contains open transaction
+     */
     boolean hasNotOpenTransactions() {
         return Objects.isNull(copyDataForTransactions);
     }
