@@ -170,13 +170,11 @@ public abstract class Repository<Record> {
      * else return inputted record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record save(final Record record) {
+    public synchronized Record save(final Record record) {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
-            synchronized (this) {
-                cluster.set(id, record);
-            }
+            cluster.set(id, record);
         } else {
             if (needGenerateId) {
                 id = generateAndSetIdForRecord(record);
@@ -196,13 +194,11 @@ public abstract class Repository<Record> {
      * else return inputted record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record save(final Record record, final Transaction transaction) {
+    public synchronized Record save(final Record record, final Transaction transaction) {
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKeyFromTransaction(id)) {
-            synchronized (this) {
-                cluster.set(id, record, transaction);
-            }
+            cluster.set(id, record, transaction);
         } else {
             if (needGenerateId) {
                 id = generateAndSetIdForRecord(record);
@@ -276,23 +272,40 @@ public abstract class Repository<Record> {
     public abstract Set<Record> findAll(int startIndex, int rowCount, Transaction transaction);
 
     /**
-     * Remove record with current id
+     * Remove record with current id. If current cluster becomes empty it is deleted.
      *
      * @param id Id of the record being deleted
-     * @return Record, which was deleted from repository, or null, where specified record not exist
+     * @return Record, which was deleted from repository, or null, if specified record not exist
      * @throws DeadLockException Current record lock from other transaction
      */
-    public abstract Record deleteById(Object id);
+    public synchronized Record deleteById(final Object id) {
+        String realId = String.valueOf(id);
+        Cluster<Record> cluster = findCurrentClusterFromId(realId);
+        if (Objects.isNull(cluster)) {
+            return null;
+        }
+        Record record = cluster.delete(realId);
+        deleteClusterIfNeed(cluster);
+        return record;
+    }
 
     /**
      * Remove record with current id in current transaction
      *
-     * @param id Id of the record being deleted
+     * @param id          Id of the record being deleted
+     * @param transaction Transaction, in which execute delete
      * @return Record, which was deleted from repository in current transaction, or null,
-     * where specified record not exist in current transaction
+     * if specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    public abstract Record deleteById(Object id, Transaction transaction);
+    public synchronized Record deleteById(final Object id, final Transaction transaction) {
+        String realId = String.valueOf(id);
+        Cluster<Record> cluster = findCurrentClusterFromId(realId);
+        if (Objects.isNull(cluster)) {
+            return null;
+        }
+        return cluster.delete(realId, transaction);
+    }
 
     /**
      * Remove current record
@@ -333,4 +346,18 @@ public abstract class Repository<Record> {
      * Save data from current repository to file system
      */
     public abstract void flush();
+
+    /**
+     * Checks if the cluster needs to be split and splits it if necessary
+     *
+     * @param cluster The cluster being checked
+     */
+    protected abstract void splitClusterIfNeed(Cluster<Record> cluster);
+
+    /**
+     * Check if the cluster needs to be deleted and delete it if necessary
+     *
+     * @param cluster The cluster being deleted
+     */
+    protected abstract void deleteClusterIfNeed(Cluster<Record> cluster);
 }
