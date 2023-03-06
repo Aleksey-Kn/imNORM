@@ -10,25 +10,50 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Anyone methods is synchronized, because in them re-assigned 'openedCluster'.
+ * Repository with partial unloading clusters in RAM
  *
  * @param <Record> Type of entity for this repository
+ * @author Aleksey-Kn
  */
 public final class FrugalRepository<Record> extends Repository<Record> {
+    /**
+     * Set of exists clusters in file data storage
+     */
     private final TreeSet<String> clusterNames = new TreeSet<>();
-    private final LinkedHashMap<String, Cluster<Record>> openClusters;
-    private final int maxClusterCount;
 
-    FrugalRepository(Class<Record> type, File directory, int maxClusterCount) {
+    /**
+     * Set of uploaded cluster in RAM
+     */
+    private final LinkedHashMap<String, Cluster<Record>> openClusters;
+
+    /**
+     * Max clusters quantity, which repository can upload in RAM
+     */
+    private final int maxClustersQuantity;
+
+    /**
+     * Find all clusters names, which exists in current directory
+     *
+     * @param type                Type of entry for this repository
+     * @param directory           Directory, contains clusters for this repository
+     * @param maxClustersQuantity Max clusters quantity, which repository can upload in RAM
+     */
+    FrugalRepository(final Class<Record> type, final File directory, final int maxClustersQuantity) {
         super(type, directory);
-        this.maxClusterCount = maxClusterCount;
-        assert maxClusterCount > 1;
-        openClusters = new LinkedHashMap<>(maxClusterCount + 1);
+        this.maxClustersQuantity = maxClustersQuantity;
+        assert maxClustersQuantity > 1;
+        openClusters = new LinkedHashMap<>(maxClustersQuantity + 1);
         clusterNames.addAll(Arrays.asList(Objects.requireNonNull(directory.list())));
     }
 
+    /**
+     * Find cluster, which can contains current id. If such cluster not exists in RAM, upload it from file data storage
+     *
+     * @param id Record id, for which execute search
+     * @return Cluster, which can contains current id, or null, if such cluster not contains in data storage
+     */
     @Override
-    protected synchronized Cluster<Record> findCurrentClusterFromId(String id) {
+    protected synchronized Cluster<Record> findCurrentClusterFromId(final String id) {
         String clusterId = clusterNames.floor(id);
         if (openClusters.containsKey(clusterId)) {
             return openClusters.get(clusterId);
@@ -51,8 +76,16 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         }
     }
 
+    /**
+     * Add new record to repository. If not exist suitable cluster, a new cluster is being created.
+     * If cluster too large, split it on two cluster.
+     *
+     * @param id     String interpretation of id
+     * @param record The record being added to data storage
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
-    protected synchronized Record create(final String id, final Record record) {
+    protected synchronized void create(final String id, final Record record) {
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
             Cluster<Record> cluster = new Cluster<>(id, record, this);
             openClusters.put(id, cluster);
@@ -69,11 +102,17 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             }
         }
         checkAndDrop();
-        return record;
     }
 
+    /**
+     * Add new record to repository. If not exist suitable cluster, a new cluster is being created.
+     *
+     * @param id     String interpretation of id
+     * @param record The record being added to data storage
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
-    protected synchronized Record create(final String id, final Record record, final Transaction transaction) {
+    protected synchronized void create(final String id, final Record record, final Transaction transaction) {
         if (clusterNames.isEmpty() || clusterNames.first().compareTo(id) > 0) {
             Cluster<Record> cluster = new Cluster<>(id, record, this, transaction);
             openClusters.put(id, cluster);
@@ -84,9 +123,13 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             currentCluster.set(id, record, transaction);
         }
         checkAndDrop();
-        return record;
     }
 
+    /**
+     * Read data from not exists in RAM clusters. Used for findAll methods.
+     *
+     * @return Records from ot exists in RAM clusters
+     */
     private Set<Record> findRecordFromNotOpenClusters() {
         return clusterNames.stream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
@@ -101,17 +144,30 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * Find all data, contains in this repository
+     *
+     * @return All record, contains in this repository
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
     public synchronized Set<Record> findAll() {
         Set<Record> result = openClusters.values().stream()
-                        .flatMap(recordCluster -> recordCluster.findAll().stream())
-                        .collect(Collectors.toSet());
+                .flatMap(recordCluster -> recordCluster.findAll().stream())
+                .collect(Collectors.toSet());
         result.addAll(findRecordFromNotOpenClusters());
         return result;
     }
 
+    /**
+     * Find all data, contains in this repository with current transaction
+     *
+     * @param transaction Transaction, in which execute save
+     * @return All record, contains in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
-    public synchronized Set<Record> findAll(Transaction transaction) {
+    public synchronized Set<Record> findAll(final Transaction transaction) {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
@@ -119,7 +175,16 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         return result;
     }
 
-    private List<Record> findAfterSkippedClusterValues(Stream<Record> clusterRecords, int startIndex, int rowCount) {
+    /**
+     * Pagination data for findAll method
+     *
+     * @param clusterRecords Data for pagination
+     * @param startIndex     Quantity skipped records from start collection
+     * @param rowCount       Record quantity, which need return
+     * @return Part of the input data obtained based on pagination conditions
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    private List<Record> pagination(final Stream<Record> clusterRecords, final int startIndex, final int rowCount) {
         return clusterRecords
                 .sorted(Comparator.comparing(getIdFromRecord))
                 .skip(startIndex)
@@ -127,23 +192,36 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Find all records with pagination in this repository
+     *
+     * @param startIndex Quantity skipped records from start collection
+     * @param rowCount   Record quantity, which need return
+     * @return All record, contains in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
     public synchronized Set<Record> findAll(int startIndex, int rowCount) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
-        Stream<Record> clusterRecords;
+        int currentClusterSize;
         try {
             for (String clusterName : clusterNames) {
-                if(openClusters.containsKey(clusterName)) {
-                    clusterRecords = openClusters.get(clusterName).findAll().stream();
+                if (openClusters.containsKey(clusterName)) {
+                    currentClusterSize = openClusters.get(clusterName).size();
                 } else {
-                    clusterRecords = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .map(s -> gson.fromJson(s, type));
+                    currentClusterSize = (int) Files.lines(Path.of(directory.getAbsolutePath(), clusterName)).count();
                 }
-                if (clusterRecords.count() < startIndex) {
-                    startIndex -= clusterRecords.count();
+                if (currentClusterSize < startIndex) {
+                    startIndex -= currentClusterSize;
                 } else {
-                    afterSkippedClusterValues = findAfterSkippedClusterValues(clusterRecords, startIndex, rowCount);
+                    afterSkippedClusterValues = pagination(
+                            openClusters.containsKey(clusterName)
+                                    ? openClusters.get(clusterName).findAll().stream()
+                                    : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                                    .map(s -> gson.fromJson(s, type)),
+                            startIndex,
+                            rowCount);
                     result.addAll(afterSkippedClusterValues);
 
                     rowCount -= afterSkippedClusterValues.size();
@@ -158,23 +236,37 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         }
     }
 
+    /**
+     * Find all records with pagination in current repository with current transaction
+     *
+     * @param startIndex  Quantity skipped records from start collection
+     * @param rowCount    Record quantity, which need return
+     * @param transaction Transaction, in which execute find
+     * @return All record, contains in current transaction in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
-    public Set<Record> findAll(int startIndex, int rowCount, Transaction transaction) {
+    public Set<Record> findAll(int startIndex, int rowCount, final Transaction transaction) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
-        Stream<Record> clusterRecords;
+        int currentClusterSize;
         try {
             for (String clusterName : clusterNames) {
-                if(openClusters.containsKey(clusterName)) {
-                    clusterRecords = openClusters.get(clusterName).findAll(transaction).stream();
+                if (openClusters.containsKey(clusterName)) {
+                    currentClusterSize = openClusters.get(clusterName).sizeWithTransaction();
                 } else {
-                    clusterRecords = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .map(s -> gson.fromJson(s, type));
+                    currentClusterSize = (int) Files.lines(Path.of(directory.getAbsolutePath(), clusterName)).count();
                 }
-                if (clusterRecords.count() < startIndex) {
-                    startIndex -= clusterRecords.count();
+                if (currentClusterSize < startIndex) {
+                    startIndex -= currentClusterSize;
                 } else {
-                    afterSkippedClusterValues = findAfterSkippedClusterValues(clusterRecords, startIndex, rowCount);
+                    afterSkippedClusterValues = pagination(
+                            openClusters.containsKey(clusterName)
+                                    ? openClusters.get(clusterName).findAll(transaction).stream()
+                                    : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                                    .map(s -> gson.fromJson(s, type)),
+                            startIndex,
+                            rowCount);
                     result.addAll(afterSkippedClusterValues);
 
                     rowCount -= afterSkippedClusterValues.size();
@@ -189,8 +281,15 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         }
     }
 
+    /**
+     * Remove record with current id. If current cluster becomes empty it is deleted.
+     *
+     * @param id Id of the record being deleted
+     * @return Record, which was deleted from repository, or null, if specified record not exist
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
-    public synchronized Record deleteById(Object id) {
+    public synchronized Record deleteById(final Object id) {
         String realId = String.valueOf(id);
         Cluster<Record> cluster = findCurrentClusterFromId(realId);
         if (Objects.isNull(cluster)) {
@@ -209,8 +308,16 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         return record;
     }
 
+    /**
+     * Remove record with current id in current transaction
+     *
+     * @param id Id of the record being deleted
+     * @return Record, which was deleted from repository in current transaction, or null,
+     * if specified record not exist in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
-    public Record deleteById(Object id, Transaction transaction) {
+    public Record deleteById(final Object id, final Transaction transaction) {
         String realId = String.valueOf(id);
         Cluster<Record> cluster = findCurrentClusterFromId(realId);
         if (Objects.isNull(cluster)) {
@@ -219,6 +326,11 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         return cluster.delete(realId, transaction);
     }
 
+    /**
+     * Clear current repository from file system and RAM
+     *
+     * @throws DeadLockException Current record lock from other transaction
+     */
     @Override
     public void deleteAll() {
         super.deleteAll();
@@ -226,6 +338,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         openClusters.clear();
     }
 
+    /**
+     * Save data from current repository to file system and remove all clusters from RAM
+     */
     @Override
     public synchronized void flush() {
         for (Map.Entry<String, Cluster<Record>> entry : openClusters.entrySet()) {
@@ -242,12 +357,16 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         openClusters.clear();
     }
 
+    /**
+     * Drop from RAM after save to file system the most previously opened cluster, which not contains open transaction,
+     * if quantity of clusters more max value
+     */
     private void checkAndDrop() {
-        if (openClusters.size() > maxClusterCount) {
+        if (openClusters.size() > maxClustersQuantity) {
             Iterator<Map.Entry<String, Cluster<Record>>> it = openClusters.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<String, Cluster<Record>> entry = it.next();
-                if(entry.getValue().hasNotOpenTransactions()) {
+                if (entry.getValue().hasNotOpenTransactions()) {
                     entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
                     it.remove();
                     break;
