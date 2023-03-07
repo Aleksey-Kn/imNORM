@@ -20,7 +20,6 @@ class TransactionTest {
 
     @AfterEach
     void tearDown() {
-        log.info("---END TEST----");
         repository.deleteAll();
     }
 
@@ -133,6 +132,7 @@ class TransactionTest {
     @Test
     @SneakyThrows
     void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
+        log.info("---START SMALL TEST----");
         Set<Integer> first = Stream.iterate(1000, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
@@ -157,11 +157,13 @@ class TransactionTest {
 
         assertThat(repository.findAll().size())
                 .isEqualTo(160);
+        log.info("---END SMALL TEST----");
     }
 
     @Test
     @SneakyThrows
     void saveShouldWorkWithTwoThreadWritingInManyClustersFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
+        log.info("---START BIG TEST----");
         Set<Integer> first = Stream.iterate(10000, integer -> integer + 1)
                 .limit(1000)
                 .collect(Collectors.toSet());
@@ -186,6 +188,7 @@ class TransactionTest {
 
         assertThat(repository.findAll().size())
                 .isEqualTo(1600);
+        log.info("---END BIG TEST----");
     }
 
     @Test
