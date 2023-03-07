@@ -309,12 +309,10 @@ public final class Cluster<Record> {
     private void lock(final Transaction transaction) {
         if (!transaction.lockOwner(this)) {
             if (Objects.nonNull(copyDataForTransactions)) {
-                synchronized (repository) {
-                    try {
-                        repository.wait(transaction.getWaitTime());
-                    } catch (InterruptedException e) {
-                        throw new InternalImnormException(e);
-                    }
+                try {
+                    repository.wait(transaction.getWaitTime());
+                } catch (InterruptedException e) {
+                    throw new InternalImnormException(e);
                 }
                 if (Objects.nonNull(copyDataForTransactions)) {
                     transaction.rollback();
@@ -330,15 +328,13 @@ public final class Cluster<Record> {
      * Saving changes made in a transaction and subsequent checking of the cluster for emptiness or overcrowding
      */
     void commit() {
-        if (Objects.nonNull(copyDataForTransactions)) {
+        synchronized (repository) {
             data = copyDataForTransactions;
             copyDataForTransactions = null;
             redacted = true;
-            synchronized (repository) {
-                repository.splitClusterIfNeed(this);
-                repository.deleteClusterIfNeed(this);
-                repository.notify();
-            }
+            repository.splitClusterIfNeed(this);
+            repository.deleteClusterIfNeed(this);
+            repository.notify();
         }
     }
 
