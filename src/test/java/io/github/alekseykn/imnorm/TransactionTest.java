@@ -144,12 +144,12 @@ class TransactionTest {
             Transaction transaction = Transaction.waitingTransaction(5000);
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
-        });
+        }, "First");
         Thread thread2 = new Thread(() -> {
             Transaction transaction = Transaction.waitingTransaction(5000);
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
-        });
+        }, "Second");
         thread1.start();
         thread2.start();
         thread1.join();
@@ -175,12 +175,12 @@ class TransactionTest {
             Transaction transaction = Transaction.waitingTransaction(6000);
             first.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
-        });
+        }, "First");
         Thread thread2 = new Thread(() -> {
             Transaction transaction = Transaction.waitingTransaction(6000);
             second.forEach(id -> repository.save(new Dto(id), transaction));
             transaction.commit();
-        });
+        }, "Second");
         thread1.start();
         thread2.start();
         thread1.join();

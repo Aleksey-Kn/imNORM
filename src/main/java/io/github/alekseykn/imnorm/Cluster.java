@@ -86,6 +86,7 @@ public final class Cluster<Record> {
         repository = owner;
         firstKey = id;
 
+        log.info("Thread " + Thread.currentThread() + " get cluster " + firstKey);
         transaction.captureLock(this);
     }
 
