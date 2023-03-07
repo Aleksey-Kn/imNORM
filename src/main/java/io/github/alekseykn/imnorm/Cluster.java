@@ -3,6 +3,7 @@ package io.github.alekseykn.imnorm;
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
+import lombok.extern.java.Log;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -18,6 +19,7 @@ import java.util.*;
  * @param <Record> Type of entity for this cluster
  * @author Aleksey-Kn
  */
+@Log
 public final class Cluster<Record> {
     /**
      * Repository, to which belongs this cluster
@@ -285,12 +287,12 @@ public final class Cluster<Record> {
      */
     private void waitAndCheckDeadLock() {
         if (Objects.nonNull(copyDataForTransactions)) {
-            synchronized (repository) {
-                try {
-                    repository.wait(1000);
-                } catch (InterruptedException e) {
-                    throw new InternalImnormException(e);
-                }
+            try {
+                log.info("Thread " + Thread.currentThread() + " is await in cluster " + firstKey);
+                repository.wait(1000);
+                log.info("Thread " + Thread.currentThread() + " is resumed in cluster " + firstKey);
+            } catch (InterruptedException e) {
+                throw new InternalImnormException(e);
             }
             if (Objects.nonNull(copyDataForTransactions))
                 throw new DeadLockException(firstKey);
@@ -310,7 +312,9 @@ public final class Cluster<Record> {
         if (!transaction.lockOwner(this)) {
             if (Objects.nonNull(copyDataForTransactions)) {
                 try {
+                    log.info("Thread " + Thread.currentThread() + " is waiting in cluster " + firstKey);
                     repository.wait(transaction.getWaitTime());
+                    log.info("Thread " + Thread.currentThread() + " is resumed in cluster " + firstKey);
                 } catch (InterruptedException e) {
                     throw new InternalImnormException(e);
                 }
@@ -319,6 +323,7 @@ public final class Cluster<Record> {
                     throw new DeadLockException(firstKey);
                 }
             }
+            log.info("Thread " + Thread.currentThread() + " get cluster " + firstKey);
             copyDataForTransactions = new TreeMap<>(data);
             transaction.captureLock(this);
         }
