@@ -21,7 +21,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     /**
      * The search tree where clusters and their initial keys are mapped
      */
-    public final TreeMap<String, Cluster<Record>> data = new TreeMap<>();
+    private final TreeMap<String, Cluster<Record>> data = new TreeMap<>();
 
     /**
      * Load clusters from file system to RAM
@@ -247,7 +247,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     protected synchronized void splitClusterIfNeed(Cluster<Record> cluster) {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
-            data.put(cluster.getFirstKey(), newCluster);
+            data.put(newCluster.getFirstKey(), newCluster);
             log.info("Cluster " + cluster.getFirstKey() + " split on " + newCluster.getFirstKey());
         }
     }

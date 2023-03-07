@@ -2,7 +2,6 @@ package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
-import lombok.extern.java.Log;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
@@ -14,7 +13,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Log
 class TransactionTest {
     private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
 
@@ -132,7 +130,6 @@ class TransactionTest {
     @Test
     @SneakyThrows
     void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
-        log.info("---START SMALL TEST----");
         Set<Integer> first = Stream.iterate(1000, integer -> integer + 1)
                 .limit(100)
                 .collect(Collectors.toSet());
@@ -157,13 +154,11 @@ class TransactionTest {
 
         assertThat(repository.findAll().size())
                 .isEqualTo(160);
-        log.info("---END SMALL TEST----");
     }
 
     @Test
     @SneakyThrows
     void saveShouldWorkWithTwoThreadWritingInManyClustersFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
-        log.info("---START BIG TEST----");
         Set<Integer> first = Stream.iterate(10000, integer -> integer + 1)
                 .limit(1000)
                 .collect(Collectors.toSet());
@@ -186,11 +181,8 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        ((FastRepository<?>)repository).data.values()
-                .forEach(cluster -> log.info(cluster.getFirstKey() + cluster.size()));
         assertThat(repository.findAll().size())
                 .isEqualTo(1600);
-        log.info("---END BIG TEST----");
     }
 
     @Test

@@ -3,7 +3,6 @@ package io.github.alekseykn.imnorm;
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
-import lombok.extern.java.Log;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -19,7 +18,6 @@ import java.util.*;
  * @param <Record> Type of entity for this cluster
  * @author Aleksey-Kn
  */
-@Log
 public final class Cluster<Record> {
     /**
      * Repository, to which belongs this cluster
@@ -46,6 +44,11 @@ public final class Cluster<Record> {
      * The minimum identifier allowed for storage in this cluster
      */
     private final String firstKey;
+
+    /**
+     * Count transaction is waiting for this cluster to be released
+     */
+    private int waitingTransactionCount = 0;
 
     /**
      * Create cluster with current records collection
@@ -86,7 +89,6 @@ public final class Cluster<Record> {
         repository = owner;
         firstKey = id;
 
-        log.info("Thread " + Thread.currentThread() + " get cluster " + firstKey);
         transaction.captureLock(this);
     }
 
@@ -289,9 +291,9 @@ public final class Cluster<Record> {
     private void waitAndCheckDeadLock() {
         if (Objects.nonNull(copyDataForTransactions)) {
             try {
-                log.info("Thread " + Thread.currentThread() + " is await in cluster " + firstKey);
+                waitingTransactionCount++;
                 repository.wait(1000);
-                log.info("Thread " + Thread.currentThread() + " is resumed in cluster " + firstKey);
+                waitingTransactionCount--;
             } catch (InterruptedException e) {
                 throw new InternalImnormException(e);
             }
@@ -313,9 +315,9 @@ public final class Cluster<Record> {
         if (!transaction.lockOwner(this)) {
             if (Objects.nonNull(copyDataForTransactions)) {
                 try {
-                    log.info("Thread " + Thread.currentThread() + " is waiting in cluster " + firstKey);
+                    waitingTransactionCount++;
                     repository.wait(transaction.getWaitTime());
-                    log.info("Thread " + Thread.currentThread() + " is resumed in cluster " + firstKey);
+                    waitingTransactionCount--;
                 } catch (InterruptedException e) {
                     throw new InternalImnormException(e);
                 }
@@ -324,7 +326,6 @@ public final class Cluster<Record> {
                     throw new DeadLockException(firstKey);
                 }
             }
-            log.info("Thread " + Thread.currentThread() + " get cluster " + firstKey);
             copyDataForTransactions = new TreeMap<>(data);
             transaction.captureLock(this);
         }
@@ -334,14 +335,14 @@ public final class Cluster<Record> {
      * Saving changes made in a transaction and subsequent checking of the cluster for emptiness or overcrowding
      */
     void commit() {
-        synchronized (repository) {
-            log.info("From thread " + Thread.currentThread() + " commit cluster " + firstKey);
-            log.info("Contains " + sizeWithTransaction() + " records");
-            data = copyDataForTransactions;
-            copyDataForTransactions = null;
-            redacted = true;
+        data = copyDataForTransactions;
+        copyDataForTransactions = null;
+        redacted = true;
+        if(waitingTransactionCount == 0) {
             repository.splitClusterIfNeed(this);
             repository.deleteClusterIfNeed(this);
+        }
+        synchronized (repository) {
             repository.notify();
         }
     }
@@ -350,9 +351,8 @@ public final class Cluster<Record> {
      * Canceling changes made in a transaction
      */
     void rollback() {
+        copyDataForTransactions = null;
         synchronized (repository) {
-            log.info("Rollback cluster " + firstKey + " from tread " + Thread.currentThread());
-            copyDataForTransactions = null;
             repository.notify();
         }
     }
