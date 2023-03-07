@@ -338,11 +338,11 @@ public final class Cluster<Record> {
         data = copyDataForTransactions;
         copyDataForTransactions = null;
         redacted = true;
-        if(waitingTransactionCount == 0) {
-            repository.splitClusterIfNeed(this);
-            repository.deleteClusterIfNeed(this);
-        }
         synchronized (repository) {
+            if (waitingTransactionCount == 0) {
+                repository.splitClusterIfNeed(this);
+                repository.deleteClusterIfNeed(this);
+            }
             repository.notify();
         }
     }
