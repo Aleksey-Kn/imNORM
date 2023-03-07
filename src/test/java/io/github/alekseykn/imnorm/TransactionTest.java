@@ -186,6 +186,8 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
+        ((FastRepository<?>)repository).data.values()
+                .forEach(cluster -> log.info(cluster.getFirstKey() + cluster.size()));
         assertThat(repository.findAll().size())
                 .isEqualTo(1600);
         log.info("---END BIG TEST----");

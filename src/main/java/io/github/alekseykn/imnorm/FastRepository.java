@@ -19,7 +19,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     /**
      * The search tree where clusters and their initial keys are mapped
      */
-    private final TreeMap<String, Cluster<Record>> data = new TreeMap<>();
+    public final TreeMap<String, Cluster<Record>> data = new TreeMap<>();
 
     /**
      * Load clusters from file system to RAM
