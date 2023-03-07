@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm;
 
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
+import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -288,7 +289,7 @@ public final class Cluster<Record> {
                 try {
                     repository.wait(1000);
                 } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                    throw new InternalImnormException(e);
                 }
             }
             if (Objects.nonNull(copyDataForTransactions))
@@ -312,7 +313,7 @@ public final class Cluster<Record> {
                     try {
                         repository.wait(transaction.getWaitTime());
                     } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                        throw new InternalImnormException(e);
                     }
                 }
                 if (Objects.nonNull(copyDataForTransactions)) {
