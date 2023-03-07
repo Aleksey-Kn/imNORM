@@ -335,6 +335,7 @@ public final class Cluster<Record> {
      */
     void commit() {
         synchronized (repository) {
+            log.info("Commit cluster " + firstKey + " from tread " + Thread.currentThread());
             data = copyDataForTransactions;
             copyDataForTransactions = null;
             redacted = true;
@@ -348,8 +349,9 @@ public final class Cluster<Record> {
      * Canceling changes made in a transaction
      */
     void rollback() {
-        copyDataForTransactions = null;
         synchronized (repository) {
+            log.info("Rollback cluster " + firstKey + " from tread " + Thread.currentThread());
+            copyDataForTransactions = null;
             repository.notify();
         }
     }
