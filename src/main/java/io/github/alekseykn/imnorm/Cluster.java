@@ -335,7 +335,8 @@ public final class Cluster<Record> {
      */
     void commit() {
         synchronized (repository) {
-            log.info("Commit cluster " + firstKey + " from tread " + Thread.currentThread());
+            log.info("From thread " + Thread.currentThread() + " commit cluster " + firstKey);
+            log.info("Contains " + sizeWithTransaction() + " records");
             data = copyDataForTransactions;
             copyDataForTransactions = null;
             redacted = true;
