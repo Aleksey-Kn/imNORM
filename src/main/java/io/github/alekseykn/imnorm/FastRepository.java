@@ -1,5 +1,6 @@
 package io.github.alekseykn.imnorm;
 
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.*;
@@ -7,8 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
-import io.github.alekseykn.imnorm.exceptions.DeadLockException;
-import lombok.extern.java.Log;
 
 /**
  * Repository with full unloading clusters in RAM
@@ -16,7 +15,6 @@ import lombok.extern.java.Log;
  * @param <Record> Type of entity for this repository
  * @author Aleksey-Kn
  */
-@Log
 public final class FastRepository<Record> extends Repository<Record> {
     /**
      * The search tree where clusters and their initial keys are mapped
@@ -234,7 +232,6 @@ public final class FastRepository<Record> extends Repository<Record> {
     protected synchronized void deleteClusterIfNeed(Cluster<Record> cluster) {
         try {
             if (cluster.isEmpty()) {
-                log.info("Cluster " + cluster.getFirstKey() + " removed!");
                 Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
                 data.remove(cluster.getFirstKey());
             }
@@ -248,7 +245,6 @@ public final class FastRepository<Record> extends Repository<Record> {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
             data.put(newCluster.getFirstKey(), newCluster);
-            log.info("Cluster " + cluster.getFirstKey() + " split on " + newCluster.getFirstKey());
         }
     }
 }
