@@ -158,6 +158,35 @@ class TransactionTest {
 
     @Test
     @SneakyThrows
+    void saveShouldWorkWithTwoThreadWritingInManyClustersFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
+        Set<Integer> first = Stream.iterate(10000, integer -> integer + 1)
+                .limit(1000)
+                .collect(Collectors.toSet());
+        Set<Integer> second = Stream.iterate(10600, integer -> integer + 1)
+                .limit(1000)
+                .collect(Collectors.toSet());
+
+        Thread thread1 = new Thread(() -> {
+            Transaction transaction = Transaction.waitingTransaction(6000);
+            first.forEach(id -> repository.save(new Dto(id), transaction));
+            transaction.commit();
+        });
+        Thread thread2 = new Thread(() -> {
+            Transaction transaction = Transaction.waitingTransaction(6000);
+            second.forEach(id -> repository.save(new Dto(id), transaction));
+            transaction.commit();
+        });
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+
+        assertThat(repository.findAll().size())
+                .isEqualTo(1600);
+    }
+
+    @Test
+    @SneakyThrows
     void saveShouldRollbackWhereThrowExceptionFromRetryingWaitTransactions() {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
