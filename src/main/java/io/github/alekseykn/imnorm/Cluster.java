@@ -46,6 +46,11 @@ public final class Cluster<Record> {
     private final String firstKey;
 
     /**
+     * Count transaction is waiting for this cluster to be released
+     */
+    private int waitingTransactionCount = 0;
+
+    /**
      * Create cluster with current records collection
      *
      * @param map   Record collection
@@ -285,12 +290,12 @@ public final class Cluster<Record> {
      */
     private void waitAndCheckDeadLock() {
         if (Objects.nonNull(copyDataForTransactions)) {
-            synchronized (repository) {
-                try {
-                    repository.wait(1000);
-                } catch (InterruptedException e) {
-                    throw new InternalImnormException(e);
-                }
+            try {
+                waitingTransactionCount++;
+                repository.wait(1000);
+                waitingTransactionCount--;
+            } catch (InterruptedException e) {
+                throw new InternalImnormException(e);
             }
             if (Objects.nonNull(copyDataForTransactions))
                 throw new DeadLockException(firstKey);
@@ -309,12 +314,12 @@ public final class Cluster<Record> {
     private void lock(final Transaction transaction) {
         if (!transaction.lockOwner(this)) {
             if (Objects.nonNull(copyDataForTransactions)) {
-                synchronized (repository) {
-                    try {
-                        repository.wait(transaction.getWaitTime());
-                    } catch (InterruptedException e) {
-                        throw new InternalImnormException(e);
-                    }
+                try {
+                    waitingTransactionCount++;
+                    repository.wait(transaction.getWaitTime());
+                    waitingTransactionCount--;
+                } catch (InterruptedException e) {
+                    throw new InternalImnormException(e);
                 }
                 if (Objects.nonNull(copyDataForTransactions)) {
                     transaction.rollback();
@@ -330,15 +335,15 @@ public final class Cluster<Record> {
      * Saving changes made in a transaction and subsequent checking of the cluster for emptiness or overcrowding
      */
     void commit() {
-        if (Objects.nonNull(copyDataForTransactions)) {
-            data = copyDataForTransactions;
-            copyDataForTransactions = null;
-            redacted = true;
-            synchronized (repository) {
+        data = copyDataForTransactions;
+        copyDataForTransactions = null;
+        redacted = true;
+        synchronized (repository) {
+            if (waitingTransactionCount == 0) {
                 repository.splitClusterIfNeed(this);
                 repository.deleteClusterIfNeed(this);
-                repository.notify();
             }
+            repository.notify();
         }
     }
 

@@ -1,5 +1,6 @@
 package io.github.alekseykn.imnorm;
 
+import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.*;
@@ -7,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
-import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 
 /**
  * Repository with full unloading clusters in RAM
@@ -244,7 +244,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     protected synchronized void splitClusterIfNeed(Cluster<Record> cluster) {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
-            data.put(cluster.getFirstKey(), newCluster);
+            data.put(newCluster.getFirstKey(), newCluster);
         }
     }
 }
