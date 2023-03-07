@@ -1,6 +1,7 @@
 package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
+import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import io.github.alekseykn.imnorm.exceptions.TransactionWasClosedException;
 import lombok.AccessLevel;
 import lombok.Getter;
