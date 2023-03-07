@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
+import lombok.extern.java.Log;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
@@ -13,11 +14,13 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@Log
 class TransactionTest {
     private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
 
     @AfterEach
     void tearDown() {
+        log.info("---END TEST----");
         repository.deleteAll();
     }
 
