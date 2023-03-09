@@ -177,6 +177,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Record save(final Record record) {
+        checkForBlocking();
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
@@ -201,6 +202,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Record save(final Record record, final Transaction transaction) {
+        checkForBlocking();
         String id = getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
         if (Objects.nonNull(cluster) && cluster.containsKeyFromTransaction(id)) {
@@ -285,6 +287,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Record deleteById(final Object id) {
+        checkForBlocking();
         String realId = String.valueOf(id);
         Cluster<Record> cluster = findCurrentClusterFromId(realId);
         if (Objects.isNull(cluster)) {
@@ -305,6 +308,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Record deleteById(final Object id, final Transaction transaction) {
+        checkForBlocking();
         String realId = String.valueOf(id);
         Cluster<Record> cluster = findCurrentClusterFromId(realId);
         if (Objects.isNull(cluster)) {
@@ -341,7 +345,8 @@ public abstract class Repository<Record> {
      *
      * @throws DeadLockException Current record lock from other transaction
      */
-    public void deleteAll() {
+    public synchronized void deleteAll() {
+        checkForBlocking();
         for (File file : Objects.requireNonNull(directory.listFiles())) {
             if (!file.delete())
                 throw new InternalImnormException(file.getAbsolutePath() + ".delete()");

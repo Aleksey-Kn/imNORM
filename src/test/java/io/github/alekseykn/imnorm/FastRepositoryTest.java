@@ -6,6 +6,6 @@ import support.dto.Dto;
 public class FastRepositoryTest extends RepositoryTest{
     @BeforeAll
     static void setRepository() {
-        repository = DataStorage.getDataStorage().getPreferablyFastRepositoryForClass(Dto.class);
+        repository = DataStorage.getDataStorage().getStrictlyFastRepositoryForClass(Dto.class);
     }
 }

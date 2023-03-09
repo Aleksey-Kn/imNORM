@@ -5,6 +5,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Objects;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -51,13 +57,29 @@ abstract class RepositoryTest {
 
     @Test
     void findAll() {
+        assertThat(repository.findAll()).extracting(Dto::getId).contains(5, -1, 25);
     }
 
     @Test
     void deleteAll() {
+        repository.deleteAll();
+
+        assertThat(repository.findAll()).isEmpty();
     }
 
     @Test
     void flush() {
+        repository.flush();
+
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).count()).isEqualTo(3);
     }
 }

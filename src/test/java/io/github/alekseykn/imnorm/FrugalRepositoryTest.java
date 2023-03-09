@@ -7,6 +7,6 @@ public class FrugalRepositoryTest extends RepositoryTest {
     @BeforeAll
     static void setRepository() {
         repository = DataStorage.getDataStorage()
-                .getPreferablyFrugalRepositoryForClass(Dto.class, 100);
+                .getStrictlyFrugalRepositoryForClass(Dto.class, 100);
     }
 }

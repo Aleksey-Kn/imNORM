@@ -9,6 +9,7 @@ import java.util.Map;
 
 /**
  * Container for repository. Need for create new repository and determines their location in the file system.
+ *
  * @author Aleksey-Kn
  */
 public class DataStorage {
@@ -21,6 +22,7 @@ public class DataStorage {
 
     /**
      * Create instances of DataStorage with standard path
+     *
      * @return Instances of DataStorage with standard path
      */
     public synchronized static DataStorage getDataStorage() {
@@ -29,6 +31,7 @@ public class DataStorage {
 
     /**
      * Create instances of DataStorage with specified path
+     *
      * @param path The path where the data storage will be located
      * @return Instances of DataStorage with specified path
      */
@@ -63,7 +66,8 @@ public class DataStorage {
     /**
      * Create fast repository or return exists, if it was created earlier.
      * If exists repository have other type, return repository other type instead of the requested.
-     * @param clas Class of entity
+     *
+     * @param clas    Class of entity
      * @param <Value> Type of entity
      * @return Repository for work with current entity
      */
@@ -77,7 +81,8 @@ public class DataStorage {
     /**
      * Create frugal repository or return exists, if it was created earlier.
      * If exists repository have other type, return repository other type instead of the requested
-     * @param clas Class of entity
+     *
+     * @param clas    Class of entity
      * @param <Value> Type of entity
      * @return Repository for work with current entity
      */
@@ -88,7 +93,7 @@ public class DataStorage {
         }
         return (Repository<Value>) createdRepository.get(clas);
     }
-    
+
     /**
      * Create fast repository or return exists, if it was created earlier.
      * If exists repository have other type,
@@ -100,7 +105,7 @@ public class DataStorage {
      */
     public synchronized <Value> Repository<Value> getStrictlyFastRepositoryForClass(Class<Value> clas) {
         if (createdRepository.containsKey(clas)) {
-            if(createdRepository.get(clas) instanceof FastRepository) {
+            if (createdRepository.get(clas) instanceof FastRepository) {
                 return (Repository<Value>) createdRepository.get(clas);
             } else {
                 Repository<?> oldRepository = createdRepository.get(clas);
@@ -123,9 +128,9 @@ public class DataStorage {
      * @return Repository for work with current entity
      */
     public synchronized <Value> Repository<Value> getStrictlyFrugalRepositoryForClass(Class<Value> clas,
-                                                                         int repositoryMaxMegabyteSize) {
+                                                                                      int repositoryMaxMegabyteSize) {
         if (createdRepository.containsKey(clas)) {
-            if(createdRepository.get(clas) instanceof FrugalRepository) {
+            if (createdRepository.get(clas) instanceof FrugalRepository) {
                 return (Repository<Value>) createdRepository.get(clas);
             } else {
                 Repository<?> oldRepository = createdRepository.get(clas);
@@ -142,7 +147,8 @@ public class DataStorage {
     /**
      * Create repository or return exists, if it was created earlier.
      * The memory allocated for the repository is calculated automatically based on the free memory on the device.
-     * @param clas Class of entity
+     *
+     * @param clas    Class of entity
      * @param <Value> Type of entity
      * @return Repository for work with current entity
      */
@@ -161,6 +167,7 @@ public class DataStorage {
 
     /**
      * Create directory name for repository from entity class name
+     *
      * @param forClass Entity class type
      * @return Directory for repository
      */
@@ -170,6 +177,7 @@ public class DataStorage {
 
     /**
      * Calculate memory used by the program
+     *
      * @return Memory used by the program in bytes
      */
     private long usedMemory() {
