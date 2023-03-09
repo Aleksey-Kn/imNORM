@@ -6,8 +6,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.function.BiFunction;
 
 /**
  * Container for repository. Need for create new repository and determines their location in the file system.
@@ -68,7 +66,7 @@ public class DataStorage {
      * @param <Value> Type of entity
      * @return Repository for work with current entity
      */
-    public <Value> Repository<Value> getFastRepositoryForClass(Class<Value> clas) {
+    public <Value> Repository<Value> getPreferablyFastRepositoryForClass(Class<Value> clas) {
         if (!createdRepository.containsKey(clas)) {
             createdRepository.put(clas, new FastRepository<>(clas, directoryForRepository(clas)));
         }
@@ -81,7 +79,7 @@ public class DataStorage {
      * @param <Value> Type of entity
      * @return Repository for work with current entity
      */
-    public <Value> Repository<Value> getFrugalRepositoryForClass(Class<Value> clas, int repositoryMaxMegabyteSize) {
+    public <Value> Repository<Value> getPreferablyFrugalRepositoryForClass(Class<Value> clas, int repositoryMaxMegabyteSize) {
         if (!createdRepository.containsKey(clas)) {
             createdRepository.put(clas, new FrugalRepository<>(clas, directoryForRepository(clas),
                     repositoryMaxMegabyteSize * 100));
@@ -100,10 +98,10 @@ public class DataStorage {
         if (!createdRepository.containsKey(clas)) {
             File repositoryDirectory = directoryForRepository(clas);
             if (repositoryDirectory.exists()) {
-                createdRepository.put(clas, getFrugalRepositoryForClass(clas,
+                createdRepository.put(clas, getPreferablyFrugalRepositoryForClass(clas,
                         (int) ((Runtime.getRuntime().maxMemory() - usedMemory()) / 10_485_760)));
             } else {
-                createdRepository.put(clas, getFastRepositoryForClass(clas));
+                createdRepository.put(clas, getPreferablyFastRepositoryForClass(clas));
             }
         }
         return (Repository<Value>) createdRepository.get(clas);
