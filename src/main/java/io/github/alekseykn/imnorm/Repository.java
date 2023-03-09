@@ -6,6 +6,7 @@ import io.github.alekseykn.imnorm.exceptions.CountIdException;
 import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
 import io.github.alekseykn.imnorm.exceptions.IllegalGeneratedIdTypeException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
+import io.github.alekseykn.imnorm.exceptions.RepositoryWasLockedException;
 
 import java.io.DataInputStream;
 import java.io.File;
@@ -68,6 +69,11 @@ public abstract class Repository<Record> {
      * Type of data entity
      */
     protected Class<Record> type;
+    
+    /**
+     * Indicator of the possibility of further use of the repository for write data
+     */
+    protected boolean locked = false;
 
     /**
      * Analyse data entity type and create directory for clusters
@@ -360,4 +366,19 @@ public abstract class Repository<Record> {
      * @param cluster The cluster being deleted
      */
     protected abstract void deleteClusterIfNeed(Cluster<Record> cluster);
+    
+    /**
+     * Makes the repository unavailable for further use on write data
+     */
+    protected void lock() {
+        locked = true;
+    }
+
+    /**
+     * Throws an exception in case of an attempt to use a blocked repository for writing
+     */
+    protected void checkForBlocking() {
+        if(locked)
+            throw new RepositoryWasLockedException();
+    }
 }
