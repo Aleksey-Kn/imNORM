@@ -37,6 +37,26 @@ abstract class RepositoryTest {
     }
 
     @Test
+    void saveWithCommitTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.save(new Dto(18), transaction);
+        repository.save(new Dto(36), transaction);
+        transaction.commit();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).contains(-1, 5, 18, 25, 36);
+    }
+
+    @Test
+    void saveWithRollbackTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.save(new Dto(16), transaction);
+        repository.save(new Dto(38), transaction);
+        transaction.rollback();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).contains(-1, 5, 25);
+    }
+
+    @Test
     void findById() {
         assertThat(repository.findById(5)).isEqualTo(new Dto(5));
     }
@@ -49,6 +69,25 @@ abstract class RepositoryTest {
     }
 
     @Test
+    void deleteByIdWithCommitTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.deleteById(-1, transaction);
+        transaction.commit();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(5, 25);
+    }
+
+    @Test
+    void deleteByIdWithRollbackTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.deleteById(-1, transaction);
+        repository.deleteById(25, transaction);
+        transaction.rollback();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(-1, 5, 25);
+    }
+
+    @Test
     void delete() {
         repository.delete(new Dto(5));
 
@@ -56,8 +95,37 @@ abstract class RepositoryTest {
     }
 
     @Test
+    void deleteWithCommitTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.delete(new Dto(5), transaction);
+        transaction.commit();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(-1, 25);
+    }
+
+    @Test
+    void deleteWithRollbackTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.delete(new Dto(5), transaction);
+        repository.delete(new Dto(-1), transaction);
+        transaction.rollback();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(5, -1, 25);
+    }
+
+    @Test
     void findAll() {
         assertThat(repository.findAll()).extracting(Dto::getId).contains(5, -1, 25);
+    }
+
+    @Test
+    void findAllWithPaginationSmallRowCount() {
+        assertThat(repository.findAll(1, 1)).extracting(Dto::getId).containsOnly(25);
+    }
+
+    @Test
+    void findAllWithPaginationBigRowCount() {
+        assertThat(repository.findAll(1, 3)).extracting(Dto::getId).containsOnly(5, 25);
     }
 
     @Test
