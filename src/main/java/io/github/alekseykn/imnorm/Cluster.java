@@ -63,6 +63,21 @@ public final class Cluster<Record> {
     }
 
     /**
+     * Create cluster with current records collection in current transaction
+     *
+     * @param map   Record collection
+     * @param owner Repository, to which belongs this cluster
+     * @param transaction Transaction, in which create cluster
+     */
+    Cluster(final TreeMap<String, Record> map, final Repository<Record> owner, final Transaction transaction) {
+        copyDataForTransactions = map;
+        repository = owner;
+        firstKey = data.firstKey();
+
+        transaction.captureLock(this);
+    }
+
+    /**
      * Create cluster with current record
      *
      * @param id     String identifier, appropriate current record
@@ -216,18 +231,6 @@ public final class Cluster<Record> {
      */
     boolean containsKey(final String key) {
         return data.containsKey(key);
-    }
-
-    /**
-     * Checking the contents of a record with current string identifier in current transaction
-     *
-     * @param key String identifier
-     * @return True if cluster contains records with current string identifier in current transaction
-     */
-    boolean containsKeyFromTransaction(final String key) {
-        return Objects.nonNull(copyDataForTransactions)
-                ? copyDataForTransactions.containsKey(key)
-                : data.containsKey(key);
     }
 
     /**

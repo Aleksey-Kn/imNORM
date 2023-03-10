@@ -4,22 +4,25 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
+import support.dto.DtoWithGenerateId;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 abstract class RepositoryTest {
     protected static Repository<Dto> repository;
+    protected static Repository<DtoWithGenerateId> withGenerateIdRepository;
 
     @AfterEach
     void tearDown() {
         repository.deleteAll();
+        withGenerateIdRepository.deleteAll();
     }
 
     @BeforeEach
@@ -34,6 +37,101 @@ abstract class RepositoryTest {
         repository.save(new Dto(18));
 
         assertThat(repository.findAll()).extracting(Dto::getId).contains(-1, 5, 18, 25);
+    }
+
+    @Test
+    void saveWithGenerateId() {
+        withGenerateIdRepository.save(new DtoWithGenerateId(1));
+        withGenerateIdRepository.save(new DtoWithGenerateId(2));
+        withGenerateIdRepository.save(new DtoWithGenerateId(4));
+
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(1, 2, 4);
+    }
+
+    @Test
+    void saveWithPartialGenerateId() {
+        withGenerateIdRepository.save(new DtoWithGenerateId(1));
+        withGenerateIdRepository.save(new DtoWithGenerateId(10, 2));
+        withGenerateIdRepository.save(new DtoWithGenerateId(4));
+
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(1, 2, 4);
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getId).contains(10);
+    }
+
+    @Test
+    void saveWithGenerateIdWithCommitTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        withGenerateIdRepository.save(new DtoWithGenerateId(1), transaction);
+        withGenerateIdRepository.save(new DtoWithGenerateId(2), transaction);
+        withGenerateIdRepository.save(new DtoWithGenerateId(4), transaction);
+        transaction.commit();
+
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(1, 2, 4);
+    }
+
+    @Test
+    void saveWithGenerateIdWithRollbackTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        withGenerateIdRepository.save(new DtoWithGenerateId(1), transaction);
+        withGenerateIdRepository.save(new DtoWithGenerateId(2), transaction);
+        withGenerateIdRepository.save(new DtoWithGenerateId(4), transaction);
+        transaction.rollback();
+
+        assertThat(withGenerateIdRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void saveAll() {
+        List<Dto> list = List.of(new Dto(2), new Dto(4), new Dto(8));
+
+        repository.saveAll(list);
+
+        assertThat(repository.findAll()).extracting(Dto::getId).contains(-1, 5, 2, 4, 8, 25);
+    }
+
+    @Test
+    void saveAllWithCommitTransaction() {
+        List<Dto> list = List.of(new Dto(2), new Dto(4), new Dto(8));
+
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.saveAll(list, transaction);
+        transaction.commit();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).contains(-1, 5, 2, 4, 8, 25);
+    }
+
+    @Test
+    void saveAllWithRollbackTransaction() {
+        List<Dto> list = List.of(new Dto(2), new Dto(4), new Dto(8));
+
+        Transaction transaction = Transaction.waitingTransaction();
+        repository.saveAll(list, transaction);
+        transaction.rollback();
+
+        assertThat(repository.findAll()).extracting(Dto::getId).contains(-1, 5, 25);
+    }
+
+    @Test
+    void saveAllWithFullGenerateId() {
+        List<DtoWithGenerateId> list = List.of(new DtoWithGenerateId(2),
+                new DtoWithGenerateId(4),
+                new DtoWithGenerateId(8));
+
+        withGenerateIdRepository.saveAll(list);
+
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(2, 4, 8);
+    }
+
+    @Test
+    void saveAllWithPartialGenerateId() {
+        List<DtoWithGenerateId> list = List.of(new DtoWithGenerateId(2),
+                new DtoWithGenerateId(33, 4),
+                new DtoWithGenerateId(8));
+
+        withGenerateIdRepository.saveAll(list);
+
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(2, 4, 8);
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getId).contains(33);
     }
 
     @Test

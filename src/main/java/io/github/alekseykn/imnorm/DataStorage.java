@@ -1,10 +1,12 @@
 package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
+import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -39,7 +41,7 @@ public class DataStorage {
         path = path.toAbsolutePath();
         File rootDataStorageDirectory = path.toFile();
         if (!rootDataStorageDirectory.exists()) {
-            if (!rootDataStorageDirectory.mkdir())
+            if (!rootDataStorageDirectory.mkdirs())
                 throw new CreateDataStorageException(rootDataStorageDirectory);
         }
 

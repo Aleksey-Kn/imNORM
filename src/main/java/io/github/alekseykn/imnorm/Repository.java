@@ -14,8 +14,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.*;
+
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
+
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Provides an interface for manipulating with entity current type.
@@ -69,7 +72,7 @@ public abstract class Repository<Record> {
      * Type of data entity
      */
     protected Class<Record> type;
-    
+
     /**
      * Indicator of the possibility of further use of the repository for write data
      */
@@ -118,25 +121,49 @@ public abstract class Repository<Record> {
     }
 
     /**
+     * Determines whether to generate an identifier for the current record
+     *
+     * @param record The record being checked
+     * @return True, if the current record needs to generate an ID
+     */
+    private boolean needGenerateIdForRecord(final Record record) {
+        try {
+            return needGenerateId
+                    && switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
+                case "byte" -> recordId.get(record).equals((byte) 0);
+                case "short" -> recordId.get(record).equals((short) 0);
+                case "int" -> recordId.get(record).equals(0);
+                case "long" -> recordId.get(record).equals(0L);
+                case "float" -> recordId.get(record).equals(0f);
+                case "double" -> recordId.get(record).equals(0d);
+                case "string" -> recordId.get(record).toString().isEmpty();
+                default -> throw new IllegalGeneratedIdTypeException();
+            };
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e);
+        }
+    }
+
+    /**
      * Create and set id needed type for current record
      *
      * @param record Record, which needed create id
      * @return Created id
      */
-    protected String generateAndSetIdForRecord(final Record record) {
+    private String generateAndSetIdForRecord(final Record record) {
         try {
-            switch (recordId.getType().getSimpleName()) {
-                case "byte", "Byte" -> recordId.set(record, (byte) sequence++);
-                case "short", "Short" -> recordId.set(record, (short) sequence++);
-                case "int", "Integer" -> recordId.set(record, (int) sequence++);
-                case "long", "Long" -> recordId.set(record, sequence++);
-                default -> recordId.set(record, Long.toString(sequence++));
+            switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
+                case "byte" -> recordId.set(record, (byte) sequence);
+                case "short" -> recordId.set(record, (short) sequence);
+                case "int" -> recordId.set(record, (int) sequence);
+                case "long" -> recordId.set(record, sequence);
+                case "float" -> recordId.set(record, (float) sequence);
+                case "double" -> recordId.set(record, (double) sequence);
+                default -> recordId.set(record, Long.toString(sequence));
             }
-            return getIdFromRecord.apply(record);
+            return Long.toString(sequence++);
         } catch (IllegalAccessException e) {
             throw new InternalImnormException(e);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalGeneratedIdTypeException();
         }
     }
 
@@ -149,27 +176,26 @@ public abstract class Repository<Record> {
     protected abstract Cluster<Record> findCurrentClusterFromId(String id);
 
     /**
-     * Add new record to data storage
+     * Add new cluster and insert current record
      *
      * @param id     String interpretation of id
      * @param record The record being added to data storage
-     * @throws DeadLockException Current record lock from other transaction
      */
-    protected abstract void create(String id, Record record);
+    protected abstract void createClusterForRecord(String id, Record record);
 
     /**
-     * Add new record to data storage in current transaction
+     * Add new cluster and insert current record in current transaction
      *
      * @param id          String interpretation of id
      * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
-     * @throws DeadLockException Current record lock from other transaction
      */
-    protected abstract void create(String id, Record record, Transaction transaction);
+    protected abstract void createClusterForRecord(String id, Record record, Transaction transaction);
 
     /**
      * Add new record if record with current id not exist in data storage.
      * Update record if current id exist in data storage.
+     * If cluster too large, split it on two cluster.
      *
      * @param record Record for save
      * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
@@ -178,16 +204,20 @@ public abstract class Repository<Record> {
      */
     public synchronized Record save(final Record record) {
         checkForBlocking();
-        String id = getIdFromRecord.apply(record);
+        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
-        if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
-            cluster.set(id, record);
-        } else {
-            if (needGenerateId) {
-                id = generateAndSetIdForRecord(record);
+
+        if (Objects.nonNull(cluster)) {
+            if (cluster.containsKey(id)) {
+                cluster.set(id, record);
+            } else {
+                cluster.set(id, record);
+                splitClusterIfNeed(cluster);
             }
-            create(id, record);
+        } else {
+            createClusterForRecord(id, record);
         }
+
         return record;
     }
 
@@ -203,17 +233,147 @@ public abstract class Repository<Record> {
      */
     public synchronized Record save(final Record record, final Transaction transaction) {
         checkForBlocking();
-        String id = getIdFromRecord.apply(record);
+        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord.apply(record);
         Cluster<Record> cluster = findCurrentClusterFromId(id);
-        if (Objects.nonNull(cluster) && cluster.containsKeyFromTransaction(id)) {
+
+        if (Objects.nonNull(cluster)) {
             cluster.set(id, record, transaction);
         } else {
-            if (needGenerateId) {
-                id = generateAndSetIdForRecord(record);
-            }
-            create(id, record, transaction);
+            createClusterForRecord(id, record, transaction);
         }
+
         return record;
+    }
+
+    /**
+     * Create new cluster from current record list
+     *
+     * @param records Records for insert to cluster
+     * @return Cluster, which contains current records list
+     */
+    protected Cluster<Record> createClusterFromList(final List<Record> records) {
+        TreeMap<String, Record> inputData = new TreeMap<>();
+        for (Record record : records) {
+            inputData.put(getIdFromRecord.apply(record), record);
+        }
+        return new Cluster<>(inputData, this);
+    }
+
+    /**
+     * Create new cluster from current record list in current transaction
+     *
+     * @param records     Records for insert to cluster
+     * @param transaction Transaction, in which execute create
+     * @return Cluster, which contains current records list
+     */
+    protected Cluster<Record> createClusterFromList(final List<Record> records, final Transaction transaction) {
+        TreeMap<String, Record> inputData = new TreeMap<>();
+        for (Record record : records) {
+            inputData.put(getIdFromRecord.apply(record), record);
+        }
+        return new Cluster<>(inputData, this, transaction);
+    }
+
+    /**
+     * Add new cluster and insert current collection in it
+     *
+     * @param records Records, for which needed to create new cluster
+     */
+    protected abstract void createClusterForRecords(List<Record> records);
+
+    /**
+     * Add new cluster and insert current collection in current transaction
+     *
+     * @param records     Records, for which needed to create new cluster
+     * @param transaction Transaction, in which execute create
+     */
+    protected abstract void createClusterForRecords(List<Record> records, Transaction transaction);
+
+    /**
+     * Make sorted by id list and change record id, where necessary
+     *
+     * @param records Records collection
+     * @return Sorted by id records list
+     */
+    private List<Record> createRecordsSortedList(final Collection<Record> records) {
+        return records.stream()
+                .peek(record -> {
+                    if (needGenerateIdForRecord(record))
+                        generateAndSetIdForRecord(record);
+                }).sorted(Comparator.comparing(getIdFromRecord).reversed())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Save records collection to data storage: add new records and update exists records.
+     * All too large clusters split.
+     *
+     * @param records Added records collection
+     * @return Incoming collection with changed ids, where necessary
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    public synchronized Set<Record> saveAll(final Collection<Record> records) {
+        if (records.isEmpty())
+            return null;
+        List<Record> sortedRecords = createRecordsSortedList(records);
+
+        Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
+        if(Objects.isNull(cluster)) {
+            createClusterForRecords(sortedRecords);
+        } else {
+            String id;
+            for (Record record : records) {
+                id = getIdFromRecord.apply(record);
+                if (id.compareTo(cluster.getFirstKey()) < 0) {
+                    splitClusterIfNeed(cluster);
+                    cluster = findCurrentClusterFromId(id);
+                    if (Objects.isNull(cluster)) {
+                        createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
+                                sortedRecords.size()));
+                        break;
+                    }
+                }
+                cluster.set(id, record);
+            }
+        }
+
+        return new HashSet<>(sortedRecords);
+    }
+
+    /**
+     * Save records collection to data storage: add new records and update exists records.
+     * All too large clusters split.
+     *
+     * @param records Added records collection
+     * @param transaction Transaction, in which execute save
+     * @return Incoming collection with changed ids, where necessary
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    public synchronized Set<Record> saveAll(final Collection<Record> records, Transaction transaction) {
+        if (records.isEmpty())
+            return null;
+        List<Record> sortedRecords = createRecordsSortedList(records);
+
+        Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
+        if(Objects.isNull(cluster)) {
+            createClusterForRecords(sortedRecords);
+        } else {
+            String id;
+            for (Record record : records) {
+                id = getIdFromRecord.apply(record);
+                if (id.compareTo(cluster.getFirstKey()) < 0) {
+                    cluster = findCurrentClusterFromId(id);
+                    if (Objects.isNull(cluster)) {
+                        createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
+                                sortedRecords.size()), transaction);
+                        break;
+                    }
+                }
+                cluster.set(id, record, transaction);
+            }
+        }
+
+        return new HashSet<>(sortedRecords);
     }
 
     /**
@@ -371,7 +531,7 @@ public abstract class Repository<Record> {
      * @param cluster The cluster being deleted
      */
     protected abstract void deleteClusterIfNeed(Cluster<Record> cluster);
-    
+
     /**
      * Makes the repository unavailable for further use on write data
      */
@@ -383,7 +543,7 @@ public abstract class Repository<Record> {
      * Throws an exception in case of an attempt to use a blocked repository for writing
      */
     protected void checkForBlocking() {
-        if(locked)
+        if (locked)
             throw new RepositoryWasLockedException();
     }
 }
