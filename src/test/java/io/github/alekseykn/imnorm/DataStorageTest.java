@@ -43,7 +43,7 @@ class DataStorageTest {
         DataStorage.getDataStorage().getPreferablyFastRepositoryForClass(Dto.class);
 
         assertThat(DataStorage.getDataStorage()
-                .getPreferablyFrugalRepositoryForClass(Dto.class, 1) instanceof FastRepository)
+                .getStrictlyFrugalRepositoryForClass(Dto.class, 1) instanceof FrugalRepository)
                 .isTrue();
     }
 }
