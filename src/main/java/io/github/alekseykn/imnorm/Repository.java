@@ -318,19 +318,23 @@ public abstract class Repository<Record> {
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
-        String id;
-        for (Record record : records) {
-            id = getIdFromRecord.apply(record);
-            if (id.compareTo(cluster.getFirstKey()) < 0) {
-                splitClusterIfNeed(cluster);
-                cluster = findCurrentClusterFromId(id);
-                if (Objects.isNull(cluster)) {
-                    createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record) + 1,
-                            sortedRecords.size()));
-                    break;
+        if(Objects.isNull(cluster)) {
+            createClusterForRecords(sortedRecords);
+        } else {
+            String id;
+            for (Record record : records) {
+                id = getIdFromRecord.apply(record);
+                if (id.compareTo(cluster.getFirstKey()) < 0) {
+                    splitClusterIfNeed(cluster);
+                    cluster = findCurrentClusterFromId(id);
+                    if (Objects.isNull(cluster)) {
+                        createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
+                                sortedRecords.size()));
+                        break;
+                    }
                 }
+                cluster.set(id, record);
             }
-            cluster.set(id, record);
         }
 
         return new HashSet<>(sortedRecords);
@@ -351,18 +355,22 @@ public abstract class Repository<Record> {
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
-        String id;
-        for (Record record : records) {
-            id = getIdFromRecord.apply(record);
-            if (id.compareTo(cluster.getFirstKey()) < 0) {
-                cluster = findCurrentClusterFromId(id);
-                if (Objects.isNull(cluster)) {
-                    createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record) + 1,
-                            sortedRecords.size()), transaction);
-                    break;
+        if(Objects.isNull(cluster)) {
+            createClusterForRecords(sortedRecords);
+        } else {
+            String id;
+            for (Record record : records) {
+                id = getIdFromRecord.apply(record);
+                if (id.compareTo(cluster.getFirstKey()) < 0) {
+                    cluster = findCurrentClusterFromId(id);
+                    if (Objects.isNull(cluster)) {
+                        createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
+                                sortedRecords.size()), transaction);
+                        break;
+                    }
                 }
+                cluster.set(id, record, transaction);
             }
-            cluster.set(id, record, transaction);
         }
 
         return new HashSet<>(sortedRecords);
