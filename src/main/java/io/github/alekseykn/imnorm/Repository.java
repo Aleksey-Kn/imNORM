@@ -239,6 +239,37 @@ public abstract class Repository<Record> {
         }
         return record;
     }
+    
+    protected abstract void createClusterForRecords(List<Record> records);
+
+    public synchronized Set<Record> saveAll(final Collection<Record> records) {
+        if(records.isEmpty())
+            return null;
+        List<Record> sortedRecords = records.stream()
+                .peek(record -> {
+                    if (needGenerateIdForRecord(record))
+                        generateAndSetIdForRecord(record);
+                }).sorted(Comparator.comparing(getIdFromRecord).reversed())
+                .collect(Collectors.toList());
+
+        Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
+        String id;
+        for(Record record: records) {
+            id = getIdFromRecord.apply(record);
+            if (id.compareTo(cluster.getFirstKey()) < 0) {
+                splitClusterIfNeed(cluster);
+                cluster = findCurrentClusterFromId(id);
+                if (Objects.isNull(cluster)) {
+                    createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record) + 1, 
+                            sortedRecords.size()));
+                    break;
+                }
+            }
+            cluster.set(id, record);
+        }
+
+        return new HashSet<>(sortedRecords);
+    }
 
     /**
      * Find record with current id
