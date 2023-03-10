@@ -21,4 +21,4 @@ mvn install
 ```
 
 ## Issue tracking
-Found a bug? Have an idea for an improvement? Feel free to [file an issue](https://github.com/Aleksey-Kn/imNORM/issues)
+Found a bug? Have an idea for an improvement? Feel free to [file an issue.](https://github.com/Aleksey-Kn/imNORM/issues)
