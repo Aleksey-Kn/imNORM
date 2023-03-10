@@ -230,13 +230,12 @@ public final class FastRepository<Record> extends Repository<Record> {
 
     @Override
     protected synchronized void deleteClusterIfNeed(Cluster<Record> cluster) {
-        try {
-            if (cluster.isEmpty()) {
+        if (cluster.isEmpty()) {
+            try {
                 Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
-                data.remove(cluster.getFirstKey());
+            } catch (IOException ignore) {
             }
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
+            data.remove(cluster.getFirstKey());
         }
     }
 

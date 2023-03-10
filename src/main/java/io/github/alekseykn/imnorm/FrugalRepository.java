@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 
 /**
@@ -104,8 +105,8 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     /**
      * Add new record to repository. If not exist suitable cluster, a new cluster is being created.
      *
-     * @param id     String interpretation of id
-     * @param record The record being added to data storage
+     * @param id          String interpretation of id
+     * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
      * @throws DeadLockException Current record lock from other transaction
      */
@@ -329,7 +330,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected void splitClusterIfNeed(Cluster<Record> cluster) {
+    protected synchronized void splitClusterIfNeed(Cluster<Record> cluster) {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
             String firstKeyNewCluster = newCluster.getFirstKey();
@@ -339,15 +340,14 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected void deleteClusterIfNeed(Cluster<Record> cluster) {
-        try {
-            if (cluster.isEmpty()) {
+    protected synchronized void deleteClusterIfNeed(Cluster<Record> cluster) {
+        if (cluster.isEmpty()) {
+            try {
                 Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
-                clusterNames.remove(cluster.getFirstKey());
-                openClusters.remove(cluster.getFirstKey());
+            } catch (IOException ignore) {
             }
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
+            clusterNames.remove(cluster.getFirstKey());
+            openClusters.remove(cluster.getFirstKey());
         }
     }
 }
