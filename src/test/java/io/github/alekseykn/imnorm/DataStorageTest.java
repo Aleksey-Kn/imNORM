@@ -1,6 +1,5 @@
 package io.github.alekseykn.imnorm;
 
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
@@ -8,7 +7,6 @@ import java.io.File;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class DataStorageTest {
 
