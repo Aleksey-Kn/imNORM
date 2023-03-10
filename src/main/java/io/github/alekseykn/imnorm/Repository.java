@@ -116,6 +116,30 @@ public abstract class Repository<Record> {
             }
         }
     }
+    
+    /**
+     * Determines whether to generate an identifier for the current record
+     *
+     * @param record The record being checked
+     * @return True, if the current record needs to generate an ID
+     */
+    private boolean needGenerateIdForRecord(final Record record) {
+        try {
+            return needGenerateId
+                    && switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
+                case "byte" -> recordId.get(record).equals((byte) 0);
+                case "short" -> recordId.get(record).equals((short) 0);
+                case "int" -> recordId.get(record).equals(0);
+                case "long" -> recordId.get(record).equals(0L);
+                case "float" -> recordId.get(record).equals(0f);
+                case "double" -> recordId.get(record).equals(0d);
+                case "string" -> recordId.get(record).toString().isEmpty();
+                default -> throw new IllegalGeneratedIdTypeException();
+            };
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e);
+        }
+    }
 
     /**
      * Create and set id needed type for current record
@@ -123,20 +147,20 @@ public abstract class Repository<Record> {
      * @param record Record, which needed create id
      * @return Created id
      */
-    protected String generateAndSetIdForRecord(final Record record) {
+    private String generateAndSetIdForRecord(final Record record) {
         try {
-            switch (recordId.getType().getSimpleName()) {
-                case "byte", "Byte" -> recordId.set(record, (byte) sequence++);
-                case "short", "Short" -> recordId.set(record, (short) sequence++);
-                case "int", "Integer" -> recordId.set(record, (int) sequence++);
-                case "long", "Long" -> recordId.set(record, sequence++);
-                default -> recordId.set(record, Long.toString(sequence++));
+            switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
+                case "byte" -> recordId.set(record, (byte) sequence);
+                case "short" -> recordId.set(record, (short) sequence);
+                case "int" -> recordId.set(record, (int) sequence);
+                case "long" -> recordId.set(record, sequence);
+                case "float" -> recordId.set(record, (float) sequence);
+                case "double" -> recordId.set(record, (double) sequence);
+                default -> recordId.set(record, Long.toString(sequence));
             }
-            return getIdFromRecord.apply(record);
+            return Long.toString(sequence++);
         } catch (IllegalAccessException e) {
             throw new InternalImnormException(e);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalGeneratedIdTypeException();
         }
     }
 
@@ -183,7 +207,7 @@ public abstract class Repository<Record> {
         if (Objects.nonNull(cluster) && cluster.containsKey(id)) {
             cluster.set(id, record);
         } else {
-            if (needGenerateId) {
+            if (needGenerateIdForRecord(record)) {
                 id = generateAndSetIdForRecord(record);
             }
             create(id, record);
@@ -208,7 +232,7 @@ public abstract class Repository<Record> {
         if (Objects.nonNull(cluster) && cluster.containsKeyFromTransaction(id)) {
             cluster.set(id, record, transaction);
         } else {
-            if (needGenerateId) {
+            if (needGenerateIdForRecord(record)) {
                 id = generateAndSetIdForRecord(record);
             }
             create(id, record, transaction);
