@@ -1,6 +1,7 @@
 # ImNORM
 ![Lines of code](https://img.shields.io/tokei/lines/github/Aleksey-Kn/imNORM)
 [![Java CI](https://github.com/Aleksey-Kn/imNORM/actions/workflows/build.yml/badge.svg)](https://github.com/Aleksey-Kn/imNORM/actions/workflows/build.yml)
+[![GitHub](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com//Aleksey-Kn/imNORM/blob/master/LICENSE "MIT")
 
 In-memory NoSQL ORM for Java, worked on file system. 
 
