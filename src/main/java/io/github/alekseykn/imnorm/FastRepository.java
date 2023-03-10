@@ -66,42 +66,50 @@ public final class FastRepository<Record> extends Repository<Record> {
     }
 
     /**
-     * Add new record to repository. If not exist suitable cluster, a new cluster is being created.
-     * If cluster too large, split it on two cluster.
+     * Add new cluster and insert current record in it
      *
      * @param id     String interpretation of id
      * @param record The record being added to data storage
-     * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    protected synchronized void create(final String id, final Record record) {
-        if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
-            data.put(id, new Cluster<>(id, record, this));
-        } else {
-            Cluster<Record> currentCluster = findCurrentClusterFromId(id);
-            assert currentCluster != null;
-            currentCluster.set(id, record);
-            splitClusterIfNeed(currentCluster);
-        }
+    protected synchronized void createClusterForRecord(final String id, final Record record) {
+        data.put(id, new Cluster<>(id, record, this));
     }
 
     /**
-     * Add new record to repository. If not exist suitable cluster, a new cluster is being created.
+     * Add new cluster and insert current record in current transaction
      *
      * @param id          String interpretation of id
      * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
-     * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    protected synchronized void create(final String id, final Record record, final Transaction transaction) {
-        if (data.isEmpty() || data.firstKey().compareTo(id) > 0) {
-            data.put(id, new Cluster<>(id, record, this, transaction));
-        } else {
-            Cluster<Record> currentCluster = findCurrentClusterFromId(id);
-            assert currentCluster != null;
-            currentCluster.set(id, record, transaction);
-        }
+    protected synchronized void createClusterForRecord(final String id, final Record record,
+                                                       final Transaction transaction) {
+        data.put(id, new Cluster<>(id, record, this, transaction));
+    }
+
+    /**
+     * Add new cluster and insert current collection in it
+     *
+     * @param records Records, for which needed to create new cluster
+     */
+    @Override
+    protected void createClusterForRecords(List<Record> records) {
+        Cluster<Record> cluster = createClusterFromList(records);
+        data.put(cluster.getFirstKey(), cluster);
+    }
+
+    /**
+     * Add new cluster and insert current collection in current transaction
+     *
+     * @param records     Records, for which needed to create new cluster
+     * @param transaction Transaction, in which execute create
+     */
+    @Override
+    protected void createClusterForRecords(List<Record> records, Transaction transaction) {
+        Cluster<Record> cluster = createClusterFromList(records, transaction);
+        data.put(cluster.getFirstKey(), cluster);
     }
 
     /**
