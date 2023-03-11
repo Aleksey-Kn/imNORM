@@ -225,7 +225,7 @@ public final class FastRepository<Record> extends Repository<Record> {
      */
     @Override
     public synchronized void flush() {
-        flushSequence();
+        super.flush();
         data.values().forEach(Cluster::flush);
     }
 

@@ -511,9 +511,9 @@ public abstract class Repository<Record> {
     }
 
     /**
-     * Save sequence to file system
+     * Save data from current repository to file system
      */
-    protected void flushSequence() {
+    public void flush(){
         if (needGenerateId) {
             try (DataOutputStream outputStream = new DataOutputStream(
                     new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
@@ -523,11 +523,6 @@ public abstract class Repository<Record> {
             }
         }
     }
-
-    /**
-     * Save data from current repository to file system
-     */
-    public abstract void flush();
 
     /**
      * Checks if the cluster needs to be split and splits it if necessary

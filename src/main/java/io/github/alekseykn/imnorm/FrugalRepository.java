@@ -307,7 +307,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      */
     @Override
     public synchronized void flush() {
-        flushSequence();
+        super.flush();
         openClusters.values().forEach(Cluster::flush);
         openClusters.clear();
     }
