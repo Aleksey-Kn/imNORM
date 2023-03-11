@@ -6,6 +6,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -22,17 +27,18 @@ class TransactionTest {
     }
 
     @Test
-    void saveShouldWordWithOneTransaction() {
+    void saveShouldWorkWithOneTransaction() {
         Transaction transaction = Transaction.waitingTransaction();
         Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .forEach(id -> repository.save(new Dto(id), transaction));
         transaction.commit();
+
         assertThat(repository.findAll().size()).isEqualTo(100);
     }
 
     @Test
-    void saveShouldWordWithOneTransactionWithRollback() {
+    void saveShouldWorkWithOneTransactionWithRollback() {
         repository.save(new Dto(10));
         repository.save(new Dto(40));
 
@@ -43,6 +49,27 @@ class TransactionTest {
         transaction.rollback();
 
         assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(10, 40);
+    }
+
+    @Test
+    void saveShouldWorkWithCommitAndFlushTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        Stream.iterate(0, integer -> integer + 1)
+                .limit(100)
+                .forEach(id -> repository.save(new Dto(id), transaction));
+        transaction.commitAndFlush();
+
+        assertThat(repository.findAll().size()).isEqualTo(100);
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).count()).isEqualTo(100);
     }
 
     @Test
@@ -96,6 +123,16 @@ class TransactionTest {
 
         assertThat(repository.findAll().size())
                 .isEqualTo(140);
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).count()).isEqualTo(140);
     }
 
     @Test
@@ -208,6 +245,16 @@ class TransactionTest {
 
         assertThat(repository.findAll().size())
                 .isEqualTo(100);
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).count()).isEqualTo(100);
     }
 
     @Test

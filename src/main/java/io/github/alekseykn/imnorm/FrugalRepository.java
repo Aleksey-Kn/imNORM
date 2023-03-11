@@ -307,17 +307,15 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      */
     @Override
     public synchronized void flush() {
-        for (Map.Entry<String, Cluster<Record>> entry : openClusters.entrySet()) {
-            if (needGenerateId) {
-                try (DataOutputStream outputStream = new DataOutputStream(
-                        new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
-                    outputStream.writeLong(sequence);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+        if (needGenerateId) {
+            try (DataOutputStream outputStream = new DataOutputStream(
+                    new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
+                outputStream.writeLong(sequence);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-            entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
         }
+        openClusters.values().forEach(Cluster::flush);
         openClusters.clear();
     }
 
@@ -331,7 +329,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             while (it.hasNext()) {
                 Map.Entry<String, Cluster<Record>> entry = it.next();
                 if (entry.getValue().hasNotOpenTransactions()) {
-                    entry.getValue().flush(new File(directory.getAbsolutePath(), entry.getKey()), gson);
+                    entry.getValue().flush();
                     it.remove();
                     break;
                 }

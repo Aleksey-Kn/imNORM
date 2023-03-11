@@ -233,7 +233,7 @@ public final class FastRepository<Record> extends Repository<Record> {
                 e.printStackTrace();
             }
         }
-        data.forEach((id, cluster) -> cluster.flush(new File(directory.getAbsolutePath(), String.valueOf(id)), gson));
+        data.values().forEach(Cluster::flush);
     }
 
     @Override

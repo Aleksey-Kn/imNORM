@@ -270,14 +270,11 @@ public final class Cluster<Record> {
 
     /**
      * Save to file data storage records from this cluster
-     *
-     * @param toFile File for write records
-     * @param parser Object for parse record to string
      */
-    void flush(final File toFile, final Gson parser) {
+    void flush() {
         if (redacted) {
-            try (PrintWriter printWriter = new PrintWriter(toFile)) {
-                findAll().forEach(record -> printWriter.println(parser.toJson(record)));
+            try (PrintWriter printWriter = new PrintWriter(new File(repository.directory.getAbsolutePath(), firstKey))) {
+                findAll().forEach(record -> printWriter.println(repository.gson.toJson(record)));
                 redacted = false;
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
