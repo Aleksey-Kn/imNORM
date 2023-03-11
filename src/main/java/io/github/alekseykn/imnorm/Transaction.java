@@ -216,7 +216,7 @@ public class Transaction {
     }
 
     /**
-     * Save all changes, made in this transaction
+     * Save all changes, made in this transaction, and flush changes to file data storage
      *
      * @throws TransactionWasClosedException Accessing a transaction after it is closed
      */

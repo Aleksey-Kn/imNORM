@@ -277,7 +277,7 @@ public final class Cluster<Record> {
                 findAll().forEach(record -> printWriter.println(repository.gson.toJson(record)));
                 redacted = false;
             } catch (FileNotFoundException e) {
-                e.printStackTrace();
+                throw new InternalImnormException(e);
             }
         }
     }
