@@ -1,5 +1,6 @@
 package io.github.alekseykn.imnorm;
 
+import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
@@ -19,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TransactionTest {
-    private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
+    private final Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
+    private final Gson gson = new Gson();
 
     @AfterEach
     void tearDown() {
@@ -132,8 +134,10 @@ class TransactionTest {
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                }).count())
-                .isEqualTo(140);
+                })).containsAll(Stream.iterate(0, integer -> integer + 1)
+                .limit(140)
+                .map(integer -> gson.toJson(new Dto(integer)))
+                .collect(Collectors.toSet()));
     }
 
     @Test
@@ -259,7 +263,10 @@ class TransactionTest {
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                }).count()).isEqualTo(100);
+                })).containsAll(Stream.iterate(40, integer -> integer + 1)
+                        .limit(100)
+                        .map(integer -> gson.toJson(new Dto(integer)))
+                        .collect(Collectors.toSet()));
     }
 
     @Test
