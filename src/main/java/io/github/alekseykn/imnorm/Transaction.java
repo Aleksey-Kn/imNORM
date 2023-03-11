@@ -224,7 +224,7 @@ public class Transaction {
         if (Objects.isNull(blockingClusters))
             throw new TransactionWasClosedException();
         blockingClusters.forEach(Cluster::commit);
-        blockingClusters.forEach(Cluster::flush);
+        blockingClusters.stream().map(Cluster::getRepository).distinct().forEach(Repository::flush);
         blockingClusters = null;
         openTransactions.remove(this);
         synchronized (mutex) {

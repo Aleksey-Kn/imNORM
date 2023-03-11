@@ -1,8 +1,9 @@
 package io.github.alekseykn.imnorm;
 
-import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -22,6 +23,7 @@ public final class Cluster<Record> {
     /**
      * Repository, to which belongs this cluster
      */
+    @Getter(AccessLevel.PACKAGE)
     private final Repository<Record> repository;
 
     /**
@@ -319,7 +321,7 @@ public final class Cluster<Record> {
                     repository.wait(transaction.getWaitTime());
                     waitingTransactionCount--;
                 } catch (InterruptedException e) {
-                    throw new InternalImnormException(e);
+                    e.printStackTrace();
                 }
                 if (Objects.nonNull(copyDataForTransactions)) {
                     transaction.rollback();
