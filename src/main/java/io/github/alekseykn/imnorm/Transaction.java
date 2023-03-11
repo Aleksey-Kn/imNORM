@@ -136,7 +136,7 @@ public class Transaction {
             transaction = new Transaction(waitBeforeThrowException);
             try {
                 transactionalCall.accept(transaction);
-                transaction.commit();
+                transaction.commitAndFlush();
                 return Optional.empty();
             } catch (DeadLockException ignore) {
             } catch (Exception e) {
@@ -208,6 +208,23 @@ public class Transaction {
         if (Objects.isNull(blockingClusters))
             throw new TransactionWasClosedException();
         blockingClusters.forEach(Cluster::commit);
+        blockingClusters = null;
+        openTransactions.remove(this);
+        synchronized (mutex) {
+            mutex.notify();
+        }
+    }
+
+    /**
+     * Save all changes, made in this transaction, and flush changes to file data storage
+     *
+     * @throws TransactionWasClosedException Accessing a transaction after it is closed
+     */
+    public void commitAndFlush() {
+        if (Objects.isNull(blockingClusters))
+            throw new TransactionWasClosedException();
+        blockingClusters.forEach(Cluster::commit);
+        blockingClusters.stream().map(Cluster::getRepository).distinct().forEach(Repository::flush);
         blockingClusters = null;
         openTransactions.remove(this);
         synchronized (mutex) {

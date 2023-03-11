@@ -8,10 +8,7 @@ import io.github.alekseykn.imnorm.exceptions.IllegalGeneratedIdTypeException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import io.github.alekseykn.imnorm.exceptions.RepositoryWasLockedException;
 
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.lang.reflect.Field;
 import java.util.*;
 
@@ -516,7 +513,16 @@ public abstract class Repository<Record> {
     /**
      * Save data from current repository to file system
      */
-    public abstract void flush();
+    public void flush(){
+        if (needGenerateId) {
+            try (DataOutputStream outputStream = new DataOutputStream(
+                    new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
+                outputStream.writeLong(sequence);
+            } catch (IOException e) {
+                throw new InternalImnormException(e);
+            }
+        }
+    }
 
     /**
      * Checks if the cluster needs to be split and splits it if necessary

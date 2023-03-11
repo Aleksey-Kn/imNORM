@@ -225,15 +225,8 @@ public final class FastRepository<Record> extends Repository<Record> {
      */
     @Override
     public synchronized void flush() {
-        if (needGenerateId) {
-            try (DataOutputStream outputStream = new DataOutputStream(
-                    new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
-                outputStream.writeLong(sequence);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        data.forEach((id, cluster) -> cluster.flush(new File(directory.getAbsolutePath(), String.valueOf(id)), gson));
+        super.flush();
+        data.values().forEach(Cluster::flush);
     }
 
     @Override

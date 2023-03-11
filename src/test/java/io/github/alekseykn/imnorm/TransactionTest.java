@@ -1,11 +1,17 @@
 package io.github.alekseykn.imnorm;
 
+import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -14,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TransactionTest {
-    private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
+    private final Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
+    private final Gson gson = new Gson();
 
     @AfterEach
     void tearDown() {
@@ -22,17 +29,18 @@ class TransactionTest {
     }
 
     @Test
-    void saveShouldWordWithOneTransaction() {
+    void saveShouldWorkWithOneTransaction() {
         Transaction transaction = Transaction.waitingTransaction();
         Stream.iterate(0, integer -> integer + 1)
                 .limit(100)
                 .forEach(id -> repository.save(new Dto(id), transaction));
         transaction.commit();
+
         assertThat(repository.findAll().size()).isEqualTo(100);
     }
 
     @Test
-    void saveShouldWordWithOneTransactionWithRollback() {
+    void saveShouldWorkWithOneTransactionWithRollback() {
         repository.save(new Dto(10));
         repository.save(new Dto(40));
 
@@ -43,6 +51,27 @@ class TransactionTest {
         transaction.rollback();
 
         assertThat(repository.findAll()).extracting(Dto::getId).containsOnly(10, 40);
+    }
+
+    @Test
+    void saveShouldWorkWithCommitAndFlushTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        Stream.iterate(0, integer -> integer + 1)
+                .limit(100)
+                .forEach(id -> repository.save(new Dto(id), transaction));
+        transaction.commitAndFlush();
+
+        assertThat(repository.findAll().size()).isEqualTo(100);
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }).count()).isEqualTo(100);
     }
 
     @Test
@@ -84,9 +113,8 @@ class TransactionTest {
                 .limit(100)
                 .collect(Collectors.toSet());
 
-        Thread thread1 = new Thread(() ->
-                Transaction.executeInWaitingTransactionWithReply(transaction ->
-                        first.forEach(id -> repository.save(new Dto(id), transaction))));
+        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
+                first.forEach(id -> repository.save(new Dto(id), transaction))));
         Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
@@ -94,8 +122,22 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(140);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(0, integer -> integer + 1).limit(140).collect(Collectors.toSet()));
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                })).containsAll(Stream.iterate(0, integer -> integer + 1)
+                .limit(140)
+                .map(integer -> gson.toJson(new Dto(integer)))
+                .collect(Collectors.toSet()));
     }
 
     @Test
@@ -123,8 +165,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(80);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(0, integer -> integer + 1).limit(80).collect(Collectors.toSet()));
     }
 
     @Test
@@ -152,8 +195,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(160);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(1000, integer -> integer + 1).limit(160).collect(Collectors.toSet()));
     }
 
     @Test
@@ -181,8 +225,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(1600);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(10000, integer -> integer + 1).limit(1600).collect(Collectors.toSet()));
     }
 
     @Test
@@ -206,8 +251,22 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(100);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(40, integer -> integer + 1).limit(100).collect(Collectors.toSet()));
+        assertThat(Arrays.stream(Objects.requireNonNull(Path
+                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
+                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .flatMap(file -> {
+                    try {
+                        return Files.lines(file.toPath());
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                })).containsAll(Stream.iterate(40, integer -> integer + 1)
+                        .limit(100)
+                        .map(integer -> gson.toJson(new Dto(integer)))
+                        .collect(Collectors.toSet()));
     }
 
     @Test

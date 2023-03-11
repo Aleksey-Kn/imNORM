@@ -1,8 +1,9 @@
 package io.github.alekseykn.imnorm;
 
-import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
+import lombok.AccessLevel;
+import lombok.Getter;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -22,6 +23,7 @@ public final class Cluster<Record> {
     /**
      * Repository, to which belongs this cluster
      */
+    @Getter(AccessLevel.PACKAGE)
     private final Repository<Record> repository;
 
     /**
@@ -270,17 +272,14 @@ public final class Cluster<Record> {
 
     /**
      * Save to file data storage records from this cluster
-     *
-     * @param toFile File for write records
-     * @param parser Object for parse record to string
      */
-    void flush(final File toFile, final Gson parser) {
+    void flush() {
         if (redacted) {
-            try (PrintWriter printWriter = new PrintWriter(toFile)) {
-                findAll().forEach(record -> printWriter.println(parser.toJson(record)));
+            try (PrintWriter printWriter = new PrintWriter(new File(repository.directory.getAbsolutePath(), firstKey))) {
+                findAll().forEach(record -> printWriter.println(repository.gson.toJson(record)));
                 redacted = false;
             } catch (FileNotFoundException e) {
-                e.printStackTrace();
+                throw new InternalImnormException(e);
             }
         }
     }
@@ -322,7 +321,7 @@ public final class Cluster<Record> {
                     repository.wait(transaction.getWaitTime());
                     waitingTransactionCount--;
                 } catch (InterruptedException e) {
-                    throw new InternalImnormException(e);
+                    e.printStackTrace();
                 }
                 if (Objects.nonNull(copyDataForTransactions)) {
                     transaction.rollback();
