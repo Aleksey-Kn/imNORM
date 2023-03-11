@@ -2,7 +2,6 @@ package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
-import lombok.extern.java.Log;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
@@ -19,7 +18,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Log
 class TransactionTest {
     private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
 
@@ -122,8 +120,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(140);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(0, integer -> integer + 1).limit(140).collect(Collectors.toSet()));
         assertThat(Arrays.stream(Objects.requireNonNull(Path
                         .of("data", Dto.class.getName().replace('.', '_')).toFile()
                         .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
@@ -133,8 +132,7 @@ class TransactionTest {
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                }).peek(log::info)
-                .count())
+                }).count())
                 .isEqualTo(140);
     }
 
@@ -163,8 +161,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(80);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(0, integer -> integer + 1).limit(80).collect(Collectors.toSet()));
     }
 
     @Test
@@ -192,8 +191,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(160);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(1000, integer -> integer + 1).limit(160).collect(Collectors.toSet()));
     }
 
     @Test
@@ -221,8 +221,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(1600);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(10000, integer -> integer + 1).limit(1600).collect(Collectors.toSet()));
     }
 
     @Test
@@ -246,8 +247,9 @@ class TransactionTest {
         thread1.join();
         thread2.join();
 
-        assertThat(repository.findAll().size())
-                .isEqualTo(100);
+        assertThat(repository.findAll())
+                .extracting(Dto::getId)
+                .containsAll(Stream.iterate(40, integer -> integer + 1).limit(100).collect(Collectors.toSet()));
         assertThat(Arrays.stream(Objects.requireNonNull(Path
                         .of("data", Dto.class.getName().replace('.', '_')).toFile()
                         .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
