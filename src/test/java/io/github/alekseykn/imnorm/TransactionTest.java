@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
+import lombok.extern.java.Log;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
@@ -18,6 +19,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@Log
 class TransactionTest {
     private final static Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
 
@@ -111,9 +113,8 @@ class TransactionTest {
                 .limit(100)
                 .collect(Collectors.toSet());
 
-        Thread thread1 = new Thread(() ->
-                Transaction.executeInWaitingTransactionWithReply(transaction ->
-                        first.forEach(id -> repository.save(new Dto(id), transaction))));
+        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
+                first.forEach(id -> repository.save(new Dto(id), transaction))));
         Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
@@ -132,7 +133,9 @@ class TransactionTest {
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                }).count()).isEqualTo(140);
+                }).peek(log::info)
+                .count())
+                .isEqualTo(140);
     }
 
     @Test
