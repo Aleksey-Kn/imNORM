@@ -114,8 +114,8 @@ public class Transaction {
      *                          or the transaction completes successfully.
      * @return Exception, if procedure throw exception. Optional.empty() if procedure completed correctly.
      */
-    public static Optional<Exception> executeInWaitingTransactionWithReply(final Consumer<Transaction> transactionalCall) {
-        return executeInWaitingTransactionWithReply(transactionalCall, 250);
+    public static Optional<Exception> executeInWaitingTransactionWithRetry(final Consumer<Transaction> transactionalCall) {
+        return executeInWaitingTransactionWithRetry(transactionalCall, 250);
     }
 
     /**
@@ -129,7 +129,7 @@ public class Transaction {
      * @param waitBeforeThrowException Max time to wait for the resource to be released
      * @return Exception, if procedure throw exception. Optional.empty() if procedure completed correctly.
      */
-    public static Optional<Exception> executeInWaitingTransactionWithReply(final Consumer<Transaction> transactionalCall,
+    public static Optional<Exception> executeInWaitingTransactionWithRetry(final Consumer<Transaction> transactionalCall,
                                                                            final int waitBeforeThrowException) {
         Transaction transaction;
         while (true) {
