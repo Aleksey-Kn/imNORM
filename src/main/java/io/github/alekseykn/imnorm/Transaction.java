@@ -49,7 +49,7 @@ public class Transaction {
                     }
                 }
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new InternalImnormException(e);
             }
         });
         remover.setDaemon(true);
@@ -105,7 +105,7 @@ public class Transaction {
     }
 
     /**
-     * Execute current procedure, automatically create, commit or rollback waiting transaction.
+     * Execute current procedure, automatically create, commit and flush or rollback waiting transaction.
      * If repository throw DeadLockException, rollback transaction and procedure retry.
      * If throw other exception, rollback transaction and return this exception.
      *
@@ -114,12 +114,12 @@ public class Transaction {
      *                          or the transaction completes successfully.
      * @return Exception, if procedure throw exception. Optional.empty() if procedure completed correctly.
      */
-    public static Optional<Exception> executeInWaitingTransactionWithReply(final Consumer<Transaction> transactionalCall) {
-        return executeInWaitingTransactionWithReply(transactionalCall, 250);
+    public static Optional<Exception> executeInWaitingTransactionWithRetry(final Consumer<Transaction> transactionalCall) {
+        return executeInWaitingTransactionWithRetry(transactionalCall, 250);
     }
 
     /**
-     * Execute current procedure, automatically create, commit or rollback waiting transaction.
+     * Execute current procedure, automatically create, commit and flush or rollback waiting transaction.
      * If repository throw DeadLockException, rollback transaction and procedure retry.
      * If throw other exception, rollback transaction and return this exception.
      *
@@ -129,7 +129,7 @@ public class Transaction {
      * @param waitBeforeThrowException Max time to wait for the resource to be released
      * @return Exception, if procedure throw exception. Optional.empty() if procedure completed correctly.
      */
-    public static Optional<Exception> executeInWaitingTransactionWithReply(final Consumer<Transaction> transactionalCall,
+    public static Optional<Exception> executeInWaitingTransactionWithRetry(final Consumer<Transaction> transactionalCall,
                                                                            final int waitBeforeThrowException) {
         Transaction transaction;
         while (true) {

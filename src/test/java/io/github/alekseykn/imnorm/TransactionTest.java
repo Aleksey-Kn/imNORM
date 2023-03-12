@@ -113,9 +113,9 @@ class TransactionTest {
                 .limit(100)
                 .collect(Collectors.toSet());
 
-        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
+        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction ->
                 first.forEach(id -> repository.save(new Dto(id), transaction))));
-        Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
+        Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
         thread2.start();
@@ -240,11 +240,11 @@ class TransactionTest {
                 .limit(100)
                 .collect(Collectors.toSet());
 
-        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction -> {
+        Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             first.forEach(id -> repository.save(new Dto(id), transaction));
             throw new RuntimeException("Expected exception");
         }));
-        Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithReply(transaction ->
+        Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction ->
                 second.forEach(id -> repository.save(new Dto(id), transaction))));
         thread1.start();
         thread2.start();
