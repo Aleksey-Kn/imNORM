@@ -321,7 +321,7 @@ public final class Cluster<Record> {
                     repository.wait(transaction.getWaitTime());
                     waitingTransactionCount--;
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    throw new InternalImnormException(e);
                 }
                 if (Objects.nonNull(copyDataForTransactions)) {
                     transaction.rollback();
