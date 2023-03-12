@@ -119,7 +119,7 @@ public class Transaction {
     }
 
     /**
-     * Execute current procedure, automatically create, commit commit and flush or rollback waiting transaction.
+     * Execute current procedure, automatically create, commit and flush or rollback waiting transaction.
      * If repository throw DeadLockException, rollback transaction and procedure retry.
      * If throw other exception, rollback transaction and return this exception.
      *
