@@ -10,8 +10,7 @@ import java.util.Comparator;
 import java.util.Objects;
 import java.util.function.Predicate;
 
-public class Where<T> {
-    @Getter(AccessLevel.PUBLIC)
+public final class Where<T> implements Condition{
     private final String fieldName;
     private final Predicate<T> condition;
     private Where<?> nextCondition = null;
@@ -27,23 +26,24 @@ public class Where<T> {
         condition =  field -> compareMode.checkCondition(origin, field);
     }
 
-    public Where(final String fieldName, final CompareMode compareMode, final T origin, Comparator<T> comparator) {
+    public Where(final String fieldName, final CompareMode compareMode, final T origin, final Comparator<T> comparator) {
         this.fieldName = fieldName;
         condition = field -> compareMode.checkCondition(origin, field, comparator);
     }
 
-    public Where<?> and(final Where<?> where) {
+    public ConditionSet and(final Where<?> where) {
         where.and = true;
         where.nextCondition = this;
-        return where;
+        return new ConditionSet(where);
     }
 
-    public Where<?> or(final Where<?> where) {
+    public ConditionSet or(final Where<?> where) {
         where.and = false;
         where.nextCondition = this;
-        return where;
+        return new ConditionSet(where);
     }
 
+    @Override
     public boolean fitsCondition(final Object record) {
         try {
             Field field = record.getClass().getField(fieldName);
@@ -62,3 +62,4 @@ public class Where<T> {
         }
     }
 }
+
