@@ -1,20 +1,15 @@
 package io.github.alekseykn.imnorm.where;
 
-import lombok.AccessLevel;
-import lombok.Getter;
-import io.github.alekseykn.imnorm.IllegalFieldNameException;
-import io.github.alekseykn.imnorm.InternalImnormException;
+import io.github.alekseykn.imnorm.exceptions.IllegalFieldNameException;
+import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.lang.reflect.Field;
 import java.util.Comparator;
-import java.util.Objects;
 import java.util.function.Predicate;
 
 public final class Where<T> implements Condition{
     private final String fieldName;
     private final Predicate<T> condition;
-    private Where<?> nextCondition = null;
-    private boolean and;
 
     public Where(final String fieldName, final Predicate<T> predicate) {
         this.fieldName = fieldName;
@@ -32,29 +27,19 @@ public final class Where<T> implements Condition{
     }
 
     public ConditionSet and(final Where<?> where) {
-        where.and = true;
-        where.nextCondition = this;
-        return new ConditionSet(where);
+        return ConditionSet.and(this, where);
     }
 
     public ConditionSet or(final Where<?> where) {
-        where.and = false;
-        where.nextCondition = this;
-        return new ConditionSet(where);
+        return ConditionSet.or(this, where);
     }
 
     @Override
     public boolean fitsCondition(final Object record) {
         try {
-            Field field = record.getClass().getField(fieldName);
+            Field field = record.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
-            boolean resultCurrentWhere = condition.test((T) field.get(record));
-            if (Objects.isNull(nextCondition)) {
-                return resultCurrentWhere;
-            } else {
-                return and ? resultCurrentWhere && nextCondition.fitsCondition(record)
-                        : resultCurrentWhere || nextCondition.fitsCondition(record);
-            }
+            return condition.test((T) field.get(record));
         } catch (NoSuchFieldException e) {
             throw new IllegalFieldNameException(fieldName, record.getClass());
         } catch (IllegalAccessException e) {
