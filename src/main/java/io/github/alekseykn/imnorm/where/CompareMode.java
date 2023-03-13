@@ -4,7 +4,8 @@ import java.util.Comparator;
 import java.util.function.Predicate;
 
 public enum CompareMode {
-    EQUALS(cr -> cr == 0), NOT_EQUALS(cr -> cr != 0), MORE(cr -> cr > 0), LESS(cr -> cr < 0);
+    // Invert 'more' and 'less' because of the different  order of the arguments in Where class
+    EQUALS(cr -> cr == 0), NOT_EQUALS(cr -> cr != 0), MORE(cr -> cr < 0), LESS(cr -> cr > 0);
 
     private final Predicate<Integer> condition;
 
