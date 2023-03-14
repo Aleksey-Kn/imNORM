@@ -1,13 +1,11 @@
 package io.github.alekseykn.imnorm.where;
 
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
 import java.util.Comparator;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 class FieldConditionTest {
 

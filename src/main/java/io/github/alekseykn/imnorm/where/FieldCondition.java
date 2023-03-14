@@ -10,10 +10,10 @@ import java.util.function.Predicate;
 /**
  * Atomic condition for comparing entity field. Required for analyzing entity fields that do not have getters.
  *
- * @param <F> Field type
- * @param <E> Entity type
+ * @param <Fld> Field type
+ * @param <Entity> Entity type
  */
-public final class FieldCondition<F, E> implements Condition<E> {
+public final class FieldCondition<Fld, Entity> implements Condition<Entity> {
     /**
      * Name of the entity field for comparison
      */
@@ -22,7 +22,7 @@ public final class FieldCondition<F, E> implements Condition<E> {
     /**
      * Condition for comparison
      */
-    private final Predicate<F> condition;
+    private final Predicate<Fld> condition;
 
     /**
      * Set input predicate as condition for comparison
@@ -30,7 +30,7 @@ public final class FieldCondition<F, E> implements Condition<E> {
      * @param fieldName Name of the entity field for comparison
      * @param predicate Condition for comparison
      */
-    public FieldCondition(final String fieldName, final Predicate<F> predicate) {
+    public FieldCondition(final String fieldName, final Predicate<Fld> predicate) {
         this.fieldName = fieldName;
         condition = predicate;
     }
@@ -42,7 +42,7 @@ public final class FieldCondition<F, E> implements Condition<E> {
      * @param compareMode Operation for comparison
      * @param origin      The operand with which the entity field will be compared
      */
-    public FieldCondition(final String fieldName, final CompareMode compareMode, final Comparable<F> origin) {
+    public FieldCondition(final String fieldName, final CompareMode compareMode, final Comparable<Fld> origin) {
         this.fieldName = fieldName;
         condition = field -> compareMode.checkCondition(origin, field);
     }
@@ -55,7 +55,7 @@ public final class FieldCondition<F, E> implements Condition<E> {
      * @param origin      The operand with which the entity field will be compared
      * @param comparator  Comparison rules
      */
-    public FieldCondition(final String fieldName, final CompareMode compareMode, final F origin, final Comparator<F> comparator) {
+    public FieldCondition(final String fieldName, final CompareMode compareMode, final Fld origin, final Comparator<Fld> comparator) {
         this.fieldName = fieldName;
         condition = field -> compareMode.checkCondition(origin, field, comparator);
     }
@@ -66,7 +66,7 @@ public final class FieldCondition<F, E> implements Condition<E> {
      * @param fieldCondition Condition for combine
      * @return A set of conditions for comparison
      */
-    public ConditionSet<E> and(final FieldCondition<?, E> fieldCondition) {
+    public ConditionSet<Entity> and(final FieldCondition<?, Entity> fieldCondition) {
         return ConditionSet.and(this, fieldCondition);
     }
 
@@ -76,7 +76,7 @@ public final class FieldCondition<F, E> implements Condition<E> {
      * @param fieldCondition Condition for combine
      * @return A set of conditions for comparison
      */
-    public ConditionSet<E> or(final FieldCondition<?, E> fieldCondition) {
+    public ConditionSet<Entity> or(final FieldCondition<?, Entity> fieldCondition) {
         return ConditionSet.or(this, fieldCondition);
     }
 
@@ -90,11 +90,11 @@ public final class FieldCondition<F, E> implements Condition<E> {
      * @throws ClassCastException        Condition type does not match field type
      */
     @Override
-    public boolean fitsCondition(final E record) {
+    public boolean fitsCondition(final Entity record) {
         try {
             Field field = record.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
-            return condition.test((F) field.get(record));
+            return condition.test((Fld) field.get(record));
         } catch (NoSuchFieldException e) {
             throw new IllegalFieldNameException(fieldName, record.getClass());
         } catch (IllegalAccessException e) {

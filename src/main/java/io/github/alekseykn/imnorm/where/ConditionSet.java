@@ -98,7 +98,7 @@ public final class ConditionSet<E> implements Condition<E> {
         List<Boolean> nowOperations = new ArrayList<>(operationIsAnd);
         for (int i = 0; i < nowOperations.size(); ) {
             if (nowOperations.get(i)) {
-                nowOperands.set(i, nowOperands.get(i) && nowOperands.remove(i + 1));
+                nowOperands.set(i, nowOperands.get(i) & nowOperands.remove(i + 1));
                 nowOperations.remove(i);
             } else {
                 i++;
