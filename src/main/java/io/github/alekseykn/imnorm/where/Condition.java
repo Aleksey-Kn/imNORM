@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm.where;
 
 /**
  * Interface for checking the passage of the current object under the condition
+ * @author Aleksey-Kn
  */
 public interface Condition {
     /**
