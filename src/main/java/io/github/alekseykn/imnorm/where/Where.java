@@ -8,7 +8,7 @@ import java.util.Comparator;
 import java.util.function.Predicate;
 
 /**
- * Atomic condition for comparing entity field
+ * Atomic condition for comparing entity field. Required for analyzing entity fields that do not have getters.
  *
  * @param <F> Field type
  * @param <E> Entity type
