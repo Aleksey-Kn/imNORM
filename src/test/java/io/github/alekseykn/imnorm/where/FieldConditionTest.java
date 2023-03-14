@@ -12,11 +12,31 @@ import static org.junit.jupiter.api.Assertions.*;
 class FieldConditionTest {
 
     @Test
-    void and() {
+    void andReturnTrue() {
+        assertThat(new FieldCondition<Integer, Dto>("id", id -> id > 5)
+                .and(new FieldCondition<Integer, Dto>("id", id -> id < 10)).fitsCondition(new Dto(7)))
+                .isTrue();
     }
 
     @Test
-    void or() {
+    void andReturnFalse() {
+        assertThat(new FieldCondition<Integer, Dto>("id", id -> id > 5)
+                .and(new FieldCondition<Integer, Dto>("id", id -> id < 10)).fitsCondition(new Dto(12)))
+                .isFalse();
+    }
+
+    @Test
+    void orReturnTrue() {
+        assertThat(new FieldCondition<Integer, Dto>("id", id -> id > 5)
+                .or(new FieldCondition<Integer, Dto>("id", id -> id < 10)).fitsCondition(new Dto(12)))
+                .isTrue();
+    }
+
+    @Test
+    void orReturnFalse() {
+        assertThat(new FieldCondition<Integer, Dto>("id", id -> (id & 1) == 1)
+                .or(new FieldCondition<Integer, Dto>("id", id -> id < 10)).fitsCondition(new Dto(12)))
+                .isFalse();
     }
 
     @Test
