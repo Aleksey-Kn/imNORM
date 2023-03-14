@@ -420,7 +420,7 @@ public abstract class Repository<Record> {
      *
      * @param startIndex Quantity skipped records from start collection
      * @param rowCount   Record quantity, which need return
-     * @return All record, contains in current diapason
+     * @return All records, contains in current diapason
      * @throws DeadLockException Current record lock from other transaction
      */
     public abstract Set<Record> findAll(int startIndex, int rowCount);
@@ -431,10 +431,48 @@ public abstract class Repository<Record> {
      * @param startIndex  Quantity skipped records from start collection
      * @param rowCount    Record quantity, which need return
      * @param transaction Transaction, in which execute find
-     * @return All record, contains in current transaction in current diapason
+     * @return All records, contains in current transaction in current diapason
      * @throws DeadLockException Current record lock from other transaction
      */
     public abstract Set<Record> findAll(int startIndex, int rowCount, Transaction transaction);
+
+    /**
+     * Find all records in current repository, suitable for the specified condition
+     *
+     * @return All records, suitable for the specified condition
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    public abstract Set<Record> findAll(Condition<Record> condition);
+
+    /**
+     * Find all records, suitable for the specified condition in current transaction
+     *
+     * @param transaction Transaction, in which execute find
+     * @return Suitable for the specified condition records, contains in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    public abstract Set<Record> findAll(Condition<Record> condition, Transaction transaction);
+
+    /**
+     * Find all records with pagination, suitable for the specified condition
+     *
+     * @param startIndex Quantity skipped records from start collection
+     * @param rowCount   Record quantity, which need return
+     * @return Suitable for the specified condition records, contains in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    public abstract Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount);
+
+    /**
+     * Find all records with pagination, suitable for the specified condition in current transaction
+     *
+     * @param startIndex  Quantity skipped records from start collection
+     * @param rowCount    Record quantity, which need return
+     * @param transaction Transaction, in which execute find
+     * @return Suitable for the specified condition records, contains in current transaction in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    public abstract Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount, Transaction transaction);
 
     /**
      * Remove record with current id. If current cluster becomes empty it is deleted.
