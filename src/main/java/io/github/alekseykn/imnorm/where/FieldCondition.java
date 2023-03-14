@@ -13,7 +13,7 @@ import java.util.function.Predicate;
  * @param <F> Field type
  * @param <E> Entity type
  */
-public final class Where<F, E> implements Condition<E> {
+public final class FieldCondition<F, E> implements Condition<E> {
     /**
      * Name of the entity field for comparison
      */
@@ -30,7 +30,7 @@ public final class Where<F, E> implements Condition<E> {
      * @param fieldName Name of the entity field for comparison
      * @param predicate Condition for comparison
      */
-    public Where(final String fieldName, final Predicate<F> predicate) {
+    public FieldCondition(final String fieldName, final Predicate<F> predicate) {
         this.fieldName = fieldName;
         condition = predicate;
     }
@@ -42,7 +42,7 @@ public final class Where<F, E> implements Condition<E> {
      * @param compareMode Operation for comparison
      * @param origin      The operand with which the entity field will be compared
      */
-    public Where(final String fieldName, final CompareMode compareMode, final Comparable<F> origin) {
+    public FieldCondition(final String fieldName, final CompareMode compareMode, final Comparable<F> origin) {
         this.fieldName = fieldName;
         condition = field -> compareMode.checkCondition(origin, field);
     }
@@ -55,7 +55,7 @@ public final class Where<F, E> implements Condition<E> {
      * @param origin      The operand with which the entity field will be compared
      * @param comparator  Comparison rules
      */
-    public Where(final String fieldName, final CompareMode compareMode, final F origin, final Comparator<F> comparator) {
+    public FieldCondition(final String fieldName, final CompareMode compareMode, final F origin, final Comparator<F> comparator) {
         this.fieldName = fieldName;
         condition = field -> compareMode.checkCondition(origin, field, comparator);
     }
@@ -63,21 +63,21 @@ public final class Where<F, E> implements Condition<E> {
     /**
      * Combines conditions using a logical 'and'
      *
-     * @param where Condition for combine
+     * @param fieldCondition Condition for combine
      * @return A set of conditions for comparison
      */
-    public ConditionSet<E> and(final Where<?, E> where) {
-        return ConditionSet.and(this, where);
+    public ConditionSet<E> and(final FieldCondition<?, E> fieldCondition) {
+        return ConditionSet.and(this, fieldCondition);
     }
 
     /**
      * Combines conditions using a logical 'or'
      *
-     * @param where Condition for combine
+     * @param fieldCondition Condition for combine
      * @return A set of conditions for comparison
      */
-    public ConditionSet<E> or(final Where<?, E> where) {
-        return ConditionSet.or(this, where);
+    public ConditionSet<E> or(final FieldCondition<?, E> fieldCondition) {
+        return ConditionSet.or(this, fieldCondition);
     }
 
     /**

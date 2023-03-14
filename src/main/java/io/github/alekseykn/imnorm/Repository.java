@@ -13,6 +13,7 @@ import java.lang.reflect.Field;
 import java.util.*;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
+import io.github.alekseykn.imnorm.where.Condition;
 
 import java.util.function.Function;
 import java.util.stream.Collectors;

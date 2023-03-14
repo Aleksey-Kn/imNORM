@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
+import io.github.alekseykn.imnorm.where.Condition;
 
 /**
  * Repository with partial unloading clusters in RAM
@@ -228,9 +229,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 if (currentClusterSize < startIndex) {
                     startIndex -= currentClusterSize;
                 } else {
-                    assert readLines != null;
-                    afterSkippedClusterValues = pagination(
-                            openClusters.containsKey(clusterName)
+                    afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll().stream()
                                     : readLines.stream().map(s -> gson.fromJson(s, type)),
                             startIndex,
@@ -277,9 +276,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 if (currentClusterSize < startIndex) {
                     startIndex -= currentClusterSize;
                 } else {
-                    assert readLines != null;
-                    afterSkippedClusterValues = pagination(
-                            openClusters.containsKey(clusterName)
+                    afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll(transaction).stream()
                                     : readLines.stream().map(s -> gson.fromJson(s, type)),
                             startIndex,
