@@ -208,6 +208,82 @@ public final class FastRepository<Record> extends Repository<Record> {
         }
         return pagination(clustersData, startIndex, rowCount);
     }
+    
+    /**
+     * Find all records in current repository, suitable for the specified condition
+     *
+     * @param condition Condition for search
+     * @return All records, suitable for the specified condition
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public synchronized Set<Record> findAll(final Condition<Record> condition) {
+        return data.values().stream()
+                .flatMap(recordCluster -> recordCluster.findAll().stream())
+                .parallel()
+                .filter(condition::fitsCondition)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Find all records, suitable for the specified condition in current transaction
+     *
+     * @param condition   Condition for search
+     * @param transaction Transaction, in which execute find
+     * @return Suitable for the specified condition records, contains in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public synchronized Set<Record> findAll(final Condition<Record> condition, final Transaction transaction) {
+        return data.values().parallelStream()
+                .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
+                .filter(condition::fitsCondition)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Find all records with pagination, suitable for the specified condition
+     *
+     * @param condition  Condition for search
+     * @param startIndex Quantity skipped records from start collection
+     * @param rowCount   Record quantity, which need return
+     * @return Suitable for the specified condition records, contains in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public Set<Record> findAll(final Condition<Record> condition, final int startIndex, final int rowCount) {
+        List<Collection<Record>> clustersData;
+        synchronized (this) {
+            clustersData = data.values().stream()
+                    .map(Cluster::findAll)
+                    .map(records -> records.stream().filter(condition::fitsCondition).collect(Collectors.toList()))
+                    .collect(Collectors.toList());
+        }
+        return pagination(clustersData, startIndex, rowCount);
+    }
+
+    /**
+     * Find all records with pagination, suitable for the specified condition in current transaction
+     *
+     * @param condition   Condition for search
+     * @param startIndex  Quantity skipped records from start collection
+     * @param rowCount    Record quantity, which need return
+     * @param transaction Transaction, in which execute find
+     * @return Suitable for the specified condition records, contains in current transaction in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public Set<Record> findAll(final Condition<Record> condition, final int startIndex, final int rowCount, 
+                               final Transaction transaction) {
+        List<Collection<Record>> clustersData;
+        synchronized (this) {
+            clustersData = data.values().stream()
+                    .map(recordCluster -> recordCluster.findAll(transaction))
+                    .map(records -> records.stream().filter(condition::fitsCondition).collect(Collectors.toList()))
+                    .collect(Collectors.toList());
+        }
+        return pagination(clustersData, startIndex, rowCount);
+    }
 
     /**
      * Clear current repository from file system and RAM
