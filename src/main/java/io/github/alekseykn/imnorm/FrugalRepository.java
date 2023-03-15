@@ -118,6 +118,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Cluster<Record> cluster = createClusterFromList(records);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
+        splitClusterIfNeed(cluster);
         checkAndDrop();
     }
 
@@ -132,6 +133,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Cluster<Record> cluster = createClusterFromList(records, transaction);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
+        splitClusterIfNeed(cluster);
         checkAndDrop();
     }
 
@@ -429,6 +431,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             throw new InternalImnormException(e);
         }
     }
+    
     /**
      * Clear current repository from file system and RAM
      *
