@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 import support.dto.DtoWithGenerateId;
+import io.github.alekseykn.imnorm.where.CompareMode;
+import io.github.alekseykn.imnorm.where.FieldCondition;
 
 import java.io.IOException;
 import java.nio.file.Files;
