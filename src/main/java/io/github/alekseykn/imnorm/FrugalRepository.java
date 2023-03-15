@@ -361,34 +361,23 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     @Override
     public Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount) {
         HashSet<Record> result = new HashSet<>(rowCount);
-        List<Record> afterSkippedClusterValues;
-        int currentClusterSize;
-        List<String> readLines = null;
+        List<Record> records;
 
         try {
             for (String clusterName : clusterNames) {
-                if (openClusters.containsKey(clusterName)) {
-                    currentClusterSize = openClusters.get(clusterName).size();
+                records = (openClusters.containsKey(clusterName)
+                        ? openClusters.get(clusterName).findAll().stream()
+                        : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> gson.fromJson(s, type)))
+                        .filter(condition::fitsCondition)
+                        .collect(Collectors.toList());
+                if (records.size() < startIndex) {
+                    startIndex -= records.size();
                 } else {
-                    readLines = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .collect(Collectors.toList());
-                    currentClusterSize = readLines.size();
-                }
-                if (currentClusterSize < startIndex) {
-                    startIndex -= currentClusterSize;
-                } else {
-                    assert readLines != null;
-                    afterSkippedClusterValues = pagination(
-                            openClusters.containsKey(clusterName)
-                                    ? openClusters.get(clusterName).findAll().stream().filter(condition::fitsCondition)
-                                    : readLines.stream()
-                                    .map(s -> gson.fromJson(s, type))
-                                    .filter(condition::fitsCondition),
-                            startIndex,
-                            rowCount);
-                    result.addAll(afterSkippedClusterValues);
+                    records = pagination(records.stream(), startIndex, rowCount);
+                    result.addAll(records);
 
-                    rowCount -= afterSkippedClusterValues.size();
+                    rowCount -= records.size();
                     startIndex = 0;
                 }
                 if (rowCount == 0)
@@ -413,35 +402,23 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     @Override
     public Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount, Transaction transaction) {
         HashSet<Record> result = new HashSet<>(rowCount);
-        List<Record> afterSkippedClusterValues;
-        int currentClusterSize;
-        List<String> readLines = null;
+        List<Record> records;
 
         try {
             for (String clusterName : clusterNames) {
-                if (openClusters.containsKey(clusterName)) {
-                    currentClusterSize = openClusters.get(clusterName).sizeWithTransaction();
+                records = (openClusters.containsKey(clusterName)
+                        ? openClusters.get(clusterName).findAll(transaction).stream()
+                        : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> gson.fromJson(s, type)))
+                        .filter(condition::fitsCondition)
+                        .collect(Collectors.toList());
+                if (records.size() < startIndex) {
+                    startIndex -= records.size();
                 } else {
-                    readLines = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .collect(Collectors.toList());
-                    currentClusterSize = readLines.size();
-                }
-                if (currentClusterSize < startIndex) {
-                    startIndex -= currentClusterSize;
-                } else {
-                    assert readLines != null;
-                    afterSkippedClusterValues = pagination(
-                            openClusters.containsKey(clusterName)
-                                    ? openClusters.get(clusterName).findAll(transaction).stream()
-                                    .filter(condition::fitsCondition)
-                                    : readLines.stream()
-                                    .map(s -> gson.fromJson(s, type))
-                                    .filter(condition::fitsCondition),
-                            startIndex,
-                            rowCount);
-                    result.addAll(afterSkippedClusterValues);
+                    records = pagination(records.stream(), startIndex, rowCount);
+                    result.addAll(records);
 
-                    rowCount -= afterSkippedClusterValues.size();
+                    rowCount -= records.size();
                     startIndex = 0;
                 }
                 if (rowCount == 0)
@@ -452,7 +429,6 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             throw new InternalImnormException(e);
         }
     }
-
     /**
      * Clear current repository from file system and RAM
      *
