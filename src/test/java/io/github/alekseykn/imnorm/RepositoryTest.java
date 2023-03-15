@@ -248,4 +248,23 @@ abstract class RepositoryTest {
                     }
                 }).count()).isEqualTo(3);
     }
+    
+    @Test
+    void findAllWithCondition() {
+        assertThat(repository.findAll(new FieldCondition<>("id", CompareMode.MORE, 0)))
+                .extracting(Dto::getId).containsOnly(5, 25);
+    }
+
+    @Test
+    void findAllWithConditionAndPagination() {
+        repository.save(new Dto(100));
+
+        assertThat(repository.findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1))
+                .extracting(Dto::getId).containsOnly(25);
+    }
+    
+    @Test
+    void findAllWithLambdaCondition() {
+        assertThat(repository.findAll(record -> record.equals(new Dto(-1)))).extracting(Dto::getId).containsOnly(-1);
+    }
 }
