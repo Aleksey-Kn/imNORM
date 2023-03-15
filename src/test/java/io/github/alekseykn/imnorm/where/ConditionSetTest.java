@@ -54,4 +54,26 @@ class ConditionSetTest {
                 .and(new FieldCondition<>("id", CompareMode.MORE, 5))
                 .fitsCondition(new DtoWithGenerateId(7, 3))).isFalse();
     }
+
+    @Test
+    void fitsConditionWithNestedConditionReturnTrue() {
+        assertThat(ConditionSet.and(
+                        ConditionSet.or(
+                                new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 1),
+                                new FieldCondition<>("id", CompareMode.EQUALS, 7)),
+                        ConditionSet.or(
+                                new FieldCondition<Integer, DtoWithGenerateId>("number", n -> n < 10 && n > 5),
+                                new FieldCondition<>("id", CompareMode.MORE, 100)))
+                .fitsCondition(new DtoWithGenerateId(7, 8))).isTrue();
+    }
+
+    @Test
+    void fitsConditionWithNestedConditionReturnFalse() {
+        assertThat(ConditionSet.and(
+                        ConditionSet.or(
+                                new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 0),
+                                new FieldCondition<>("id", CompareMode.LESS, 0)),
+                new FieldCondition<>("id", CompareMode.MORE, 10))
+                .fitsCondition(new DtoWithGenerateId(7, 8))).isFalse();
+    }
 }
