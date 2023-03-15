@@ -222,7 +222,7 @@ public final class Cluster<Record> {
      * @return Quantity record in this cluster in current transaction
      */
     int sizeWithTransaction() {
-        return copyDataForTransactions.size();
+        return Objects.isNull(copyDataForTransactions)? size(): copyDataForTransactions.size();
     }
 
     /**

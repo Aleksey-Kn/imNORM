@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 import support.dto.DtoWithGenerateId;
+import io.github.alekseykn.imnorm.where.CompareMode;
+import io.github.alekseykn.imnorm.where.FieldCondition;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,6 +14,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -247,5 +251,66 @@ abstract class RepositoryTest {
                         throw new RuntimeException(e);
                     }
                 }).count()).isEqualTo(3);
+    }
+    
+    @Test
+    void findAllWithCondition() {
+        assertThat(repository.findAll(new FieldCondition<>("id", CompareMode.MORE, 0)))
+                .extracting(Dto::getId).containsOnly(5, 25);
+    }
+
+    @Test
+    void findAllWithConditionAndPagination() {
+        repository.save(new Dto(100));
+
+        assertThat(repository.findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1))
+                .extracting(Dto::getId).containsOnly(25);
+    }
+    
+    @Test
+    void findAllWithLambdaCondition() {
+        assertThat(repository.findAll(record -> record.equals(new Dto(-1)))).extracting(Dto::getId).containsOnly(-1);
+    }
+    
+    @Test
+    void findAllWithLambdaConditionWithTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(record -> record.equals(new Dto(-1)), transaction)).extracting(Dto::getId).containsOnly(-1);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithConditionAndPaginationWithTransaction() {
+        repository.save(new Dto(100));
+
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(
+                new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1, transaction))
+                .extracting(Dto::getId).containsOnly(25);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(transaction)).extracting(Dto::getId).contains(5, -1, 25);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithPaginationSmallRowCountWithTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(1, 1, transaction)).extracting(Dto::getId).containsOnly(25);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithConditionAndPaginationWithManyClusters() {
+        repository.saveAll(Stream.iterate(-2, it -> it - 1).limit(2056).map(Dto::new).collect(Collectors.toSet()));
+        repository.saveAll(Stream.iterate(1, it -> it + 1).limit(9).map(Dto::new).collect(Collectors.toSet()));
+
+        assertThat(repository
+                .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 4, 3))
+                .extracting(Dto::getId).containsOnly(4, 5, 6);
     }
 }

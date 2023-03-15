@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
+import io.github.alekseykn.imnorm.where.Condition;
 
 /**
  * Repository with partial unloading clusters in RAM
@@ -117,6 +118,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Cluster<Record> cluster = createClusterFromList(records);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
+        splitClusterIfNeed(cluster);
         checkAndDrop();
     }
 
@@ -131,6 +133,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Cluster<Record> cluster = createClusterFromList(records, transaction);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
+        splitClusterIfNeed(cluster);
         checkAndDrop();
     }
 
@@ -140,7 +143,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      * @return Records from ot exists in RAM clusters
      */
     private Set<Record> findRecordFromNotOpenClusters() {
-        return clusterNames.stream()
+        return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
                 .flatMap(clusterName -> {
                     try {
@@ -214,21 +217,23 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
+        List<String> readLines = null;
+
         try {
             for (String clusterName : clusterNames) {
                 if (openClusters.containsKey(clusterName)) {
                     currentClusterSize = openClusters.get(clusterName).size();
                 } else {
-                    currentClusterSize = (int) Files.lines(Path.of(directory.getAbsolutePath(), clusterName)).count();
+                    readLines = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                            .collect(Collectors.toList());
+                    currentClusterSize = readLines.size();
                 }
                 if (currentClusterSize < startIndex) {
                     startIndex -= currentClusterSize;
                 } else {
-                    afterSkippedClusterValues = pagination(
-                            openClusters.containsKey(clusterName)
+                    afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll().stream()
-                                    : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                                    .map(s -> gson.fromJson(s, type)),
+                                    : readLines.stream().map(s -> gson.fromJson(s, type)),
                             startIndex,
                             rowCount);
                     result.addAll(afterSkippedClusterValues);
@@ -259,21 +264,23 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
+        List<String> readLines = null;
+
         try {
             for (String clusterName : clusterNames) {
                 if (openClusters.containsKey(clusterName)) {
                     currentClusterSize = openClusters.get(clusterName).sizeWithTransaction();
                 } else {
-                    currentClusterSize = (int) Files.lines(Path.of(directory.getAbsolutePath(), clusterName)).count();
+                    readLines = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                            .collect(Collectors.toList());
+                    currentClusterSize = readLines.size();
                 }
                 if (currentClusterSize < startIndex) {
                     startIndex -= currentClusterSize;
                 } else {
-                    afterSkippedClusterValues = pagination(
-                            openClusters.containsKey(clusterName)
+                    afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll(transaction).stream()
-                                    : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                                    .map(s -> gson.fromJson(s, type)),
+                                    : readLines.stream().map(s -> gson.fromJson(s, type)),
                             startIndex,
                             rowCount);
                     result.addAll(afterSkippedClusterValues);
@@ -290,6 +297,141 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         }
     }
 
+    /**
+     * Read data from not exists in RAM clusters and filter it's on specified condition. Used for findAll methods.
+     *
+     * @param condition Condition for filter
+     * @return Records from ot exists in RAM clusters
+     */
+    private Set<Record> findRecordFromNotOpenClusters(Condition<Record> condition) {
+        return clusterNames.parallelStream()
+                .filter(clusterName -> !openClusters.containsKey(clusterName))
+                .flatMap(clusterName -> {
+                    try {
+                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName));
+                    } catch (IOException e) {
+                        throw new InternalImnormException(e);
+                    }
+                })
+                .map(record -> gson.fromJson(record, type))
+                .filter(condition::fitsCondition)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Find all records in current repository, suitable for the specified condition
+     *
+     * @param condition Condition for search
+     * @return All records, suitable for the specified condition
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public Set<Record> findAll(Condition<Record> condition) {
+        Set<Record> result = openClusters.values().stream()
+                .flatMap(recordCluster -> recordCluster.findAll().stream().filter(condition::fitsCondition))
+                .collect(Collectors.toSet());
+        result.addAll(findRecordFromNotOpenClusters(condition));
+        return result;
+    }
+
+    /**
+     * Find all records, suitable for the specified condition in current transaction
+     *
+     * @param condition   Condition for search
+     * @param transaction Transaction, in which execute find
+     * @return Suitable for the specified condition records, contains in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public Set<Record> findAll(Condition<Record> condition, Transaction transaction) {
+        Set<Record> result = openClusters.values().stream()
+                .flatMap(recordCluster -> recordCluster.findAll(transaction).stream().filter(condition::fitsCondition))
+                .collect(Collectors.toSet());
+        result.addAll(findRecordFromNotOpenClusters(condition));
+        return result;
+    }
+
+    /**
+     * Find all records with pagination, suitable for the specified condition
+     *
+     * @param condition  Condition for search
+     * @param startIndex Quantity skipped records from start collection
+     * @param rowCount   Record quantity, which need return
+     * @return Suitable for the specified condition records, contains in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount) {
+        HashSet<Record> result = new HashSet<>(rowCount);
+        List<Record> records;
+
+        try {
+            for (String clusterName : clusterNames) {
+                records = (openClusters.containsKey(clusterName)
+                        ? openClusters.get(clusterName).findAll().stream()
+                        : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> gson.fromJson(s, type)))
+                        .filter(condition::fitsCondition)
+                        .collect(Collectors.toList());
+                if (records.size() < startIndex) {
+                    startIndex -= records.size();
+                } else {
+                    records = pagination(records.stream(), startIndex, rowCount);
+                    result.addAll(records);
+
+                    rowCount -= records.size();
+                    startIndex = 0;
+                }
+                if (rowCount == 0)
+                    break;
+            }
+            return result;
+        } catch (IOException e) {
+            throw new InternalImnormException(e);
+        }
+    }
+
+    /**
+     * Find all records with pagination, suitable for the specified condition in current transaction
+     *
+     * @param condition   Condition for search
+     * @param startIndex  Quantity skipped records from start collection
+     * @param rowCount    Record quantity, which need return
+     * @param transaction Transaction, in which execute find
+     * @return Suitable for the specified condition records, contains in current transaction in current diapason
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount, Transaction transaction) {
+        HashSet<Record> result = new HashSet<>(rowCount);
+        List<Record> records;
+
+        try {
+            for (String clusterName : clusterNames) {
+                records = (openClusters.containsKey(clusterName)
+                        ? openClusters.get(clusterName).findAll(transaction).stream()
+                        : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> gson.fromJson(s, type)))
+                        .filter(condition::fitsCondition)
+                        .collect(Collectors.toList());
+                if (records.size() < startIndex) {
+                    startIndex -= records.size();
+                } else {
+                    records = pagination(records.stream(), startIndex, rowCount);
+                    result.addAll(records);
+
+                    rowCount -= records.size();
+                    startIndex = 0;
+                }
+                if (rowCount == 0)
+                    break;
+            }
+            return result;
+        } catch (IOException e) {
+            throw new InternalImnormException(e);
+        }
+    }
+    
     /**
      * Clear current repository from file system and RAM
      *
