@@ -269,4 +269,46 @@ abstract class RepositoryTest {
     void findAllWithLambdaCondition() {
         assertThat(repository.findAll(record -> record.equals(new Dto(-1)))).extracting(Dto::getId).containsOnly(-1);
     }
+    
+    @Test
+    void findAllWithLambdaConditionWithTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(record -> record.equals(new Dto(-1)), transaction)).extracting(Dto::getId).containsOnly(-1);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithConditionAndPaginationWithTransaction() {
+        repository.save(new Dto(100));
+
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(
+                new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1, transaction))
+                .extracting(Dto::getId).containsOnly(25);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(transaction)).extracting(Dto::getId).contains(5, -1, 25);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithPaginationSmallRowCountWithTransaction() {
+        Transaction transaction = Transaction.waitingTransaction();
+        assertThat(repository.findAll(1, 1, transaction)).extracting(Dto::getId).containsOnly(25);
+        transaction.commit();
+    }
+
+    @Test
+    void findAllWithConditionAndPaginationWithManyClusters() {
+        repository.saveAll(Stream.iterate(-2, it -> it - 1).limit(2056).map(Dto::new).collect(Collectors.toSet()));
+        repository.saveAll(Stream.iterate(1, it -> it + 1).limit(9).map(Dto::new).collect(Collectors.toSet()));
+
+        assertThat(repository
+                .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 4, 3))
+                .extracting(Dto::getId).containsOnly(4, 5, 6);
+    }
 }
