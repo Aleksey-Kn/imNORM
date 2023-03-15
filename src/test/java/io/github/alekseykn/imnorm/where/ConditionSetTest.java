@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConditionSetTest {
 
     @Test
-    void andReturnTrue() {
+    void andShouldReturnTrue() {
         assertThat(ConditionSet.and(new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 0),
                         new FieldCondition<>("id", CompareMode.LESS, 15))
                 .and(new FieldCondition<>("id", CompareMode.MORE, 5))
@@ -16,7 +16,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void andReturnFalse() {
+    void andShouldReturnFalse() {
         assertThat(ConditionSet.and(new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 1),
                         new FieldCondition<>("id", CompareMode.LESS, 10))
                 .and(new FieldCondition<>("id", CompareMode.MORE, 1))
@@ -24,7 +24,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void orReturnTrue() {
+    void orShouldReturnTrue() {
         assertThat(ConditionSet.or(new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 1),
                         new FieldCondition<>("id", CompareMode.LESS, 10))
                 .or(new FieldCondition<>("id", CompareMode.MORE, 1))
@@ -32,7 +32,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void orReturnFalse() {
+    void orShouldReturnFalse() {
         assertThat(ConditionSet.or(new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 1),
                         new FieldCondition<>("id", CompareMode.EQUALS, 10))
                 .or(new FieldCondition<>("id", CompareMode.NOT_EQUALS, 1))
@@ -40,7 +40,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void fitsConditionReturnTrue() {
+    void fitsConditionShouldReturnTrue() {
         assertThat(ConditionSet.or(new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 1),
                         new FieldCondition<>("id", CompareMode.LESS, 10))
                 .and(new FieldCondition<>("id", CompareMode.MORE, 5))
@@ -48,7 +48,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void fitsConditionReturnFalse() {
+    void fitsConditionShouldReturnFalse() {
         assertThat(ConditionSet.or(new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 0),
                         new FieldCondition<>("id", CompareMode.EQUALS, 10))
                 .and(new FieldCondition<>("id", CompareMode.MORE, 5))
@@ -56,7 +56,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void fitsConditionWithNestedConditionReturnTrue() {
+    void fitsConditionWithNestedConditionShouldReturnTrue() {
         assertThat(ConditionSet.and(
                         ConditionSet.or(
                                 new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 1),
@@ -68,7 +68,7 @@ class ConditionSetTest {
     }
 
     @Test
-    void fitsConditionWithNestedConditionReturnFalse() {
+    void fitsConditionWithNestedConditionShouldReturnFalse() {
         assertThat(ConditionSet.and(
                         ConditionSet.or(
                                 new FieldCondition<Integer, DtoWithGenerateId>("number", n -> (n & 1) == 0),
