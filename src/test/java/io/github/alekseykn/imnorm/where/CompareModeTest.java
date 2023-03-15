@@ -11,12 +11,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CompareModeTest {
 
     @Test
-    void checkConditionFromEqualsModeReturnTrue() {
+    void checkConditionFromEqualsModeShouldReturnTrue() {
         assertThat(CompareMode.EQUALS.checkCondition("aaa", "aaa")).isTrue();
     }
 
     @Test
-    void checkConditionFromEqualsModeReturnFalse() {
+    void checkConditionFromEqualsModeShouldReturnFalse() {
         assertThat(CompareMode.EQUALS.checkCondition(11, 22)).isFalse();
     }
 
@@ -27,12 +27,12 @@ class CompareModeTest {
     }
 
     @Test
-    void checkConditionFromNotEqualsModeReturnTrue() {
+    void checkConditionFromNotEqualsModeShouldReturnTrue() {
         assertThat(CompareMode.NOT_EQUALS.checkCondition(11, 22)).isTrue();
     }
 
     @Test
-    void checkConditionFromNotEqualsModeReturnFalse() {
+    void checkConditionFromNotEqualsModeShouldReturnFalse() {
         assertThat(CompareMode.NOT_EQUALS.checkCondition("aaa", "aaa")).isFalse();
     }
 
@@ -43,12 +43,12 @@ class CompareModeTest {
     }
 
     @Test
-    void checkConditionFromMoreModeReturnTrue() {
+    void checkConditionFromMoreModeShouldReturnTrue() {
         assertThat(CompareMode.MORE.checkCondition("aaa", "aab")).isTrue();
     }
 
     @Test
-    void checkConditionFromMoreModeReturnFalse() {
+    void checkConditionFromMoreModeShouldReturnFalse() {
         assertThat(CompareMode.MORE.checkCondition(3, 1)).isFalse();
     }
 
@@ -59,12 +59,12 @@ class CompareModeTest {
     }
 
     @Test
-    void checkConditionFromLessModeReturnTrue() {
+    void checkConditionFromLessModeShouldReturnTrue() {
         assertThat(CompareMode.LESS.checkCondition(LocalDate.now(), LocalDate.now().minusDays(1))).isTrue();
     }
 
     @Test
-    void checkConditionFromLessModeReturnFalse() {
+    void checkConditionFromLessModeShouldReturnFalse() {
         assertThat(CompareMode.LESS.checkCondition(LocalTime.now(), LocalTime.now().plusHours(2))).isFalse();
     }
 
