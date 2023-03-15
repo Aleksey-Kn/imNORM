@@ -99,6 +99,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     protected void createClusterForRecords(List<Record> records) {
         Cluster<Record> cluster = createClusterFromList(records);
         data.put(cluster.getFirstKey(), cluster);
+        splitClusterIfNeed(cluster);
     }
 
     /**
@@ -111,6 +112,7 @@ public final class FastRepository<Record> extends Repository<Record> {
     protected void createClusterForRecords(List<Record> records, Transaction transaction) {
         Cluster<Record> cluster = createClusterFromList(records, transaction);
         data.put(cluster.getFirstKey(), cluster);
+        splitClusterIfNeed(cluster);
     }
 
     /**
