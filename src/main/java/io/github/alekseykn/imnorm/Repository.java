@@ -318,6 +318,7 @@ public abstract class Repository<Record> {
         Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
         if(Objects.isNull(cluster)) {
             createClusterForRecords(sortedRecords);
+            return new HashSet<>(sortedRecords);
         } else {
             String id;
             for (Record record : records) {
@@ -328,12 +329,13 @@ public abstract class Repository<Record> {
                     if (Objects.isNull(cluster)) {
                         createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
                                 sortedRecords.size()));
-                        break;
+                        return new HashSet<>(sortedRecords);
                     }
                 }
                 cluster.set(id, record);
             }
         }
+        splitClusterIfNeed(cluster);
 
         return new HashSet<>(sortedRecords);
     }
@@ -355,6 +357,7 @@ public abstract class Repository<Record> {
         Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
         if(Objects.isNull(cluster)) {
             createClusterForRecords(sortedRecords);
+            return new HashSet<>(sortedRecords);
         } else {
             String id;
             for (Record record : records) {
@@ -364,12 +367,13 @@ public abstract class Repository<Record> {
                     if (Objects.isNull(cluster)) {
                         createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
                                 sortedRecords.size()), transaction);
-                        break;
+                        return new HashSet<>(sortedRecords);
                     }
                 }
                 cluster.set(id, record, transaction);
             }
         }
+        splitClusterIfNeed(cluster);
 
         return new HashSet<>(sortedRecords);
     }
