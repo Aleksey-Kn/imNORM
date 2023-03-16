@@ -68,8 +68,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             try {
                 TreeMap<String, Record> tempClusterData = new TreeMap<>();
                 Files.lines(Path.of(directory.getAbsolutePath(), clusterId)).forEach(line -> {
-                    Record now = gson.fromJson(line, type);
-                    tempClusterData.put(getIdFromRecord.apply(now), now);
+                    int index = line.indexOf(':');
+                    tempClusterData.put(line.substring(0, index),
+                            gson.fromJson(line.substring(index + 1), type));
                 });
                 openClusters.put(clusterId, new Cluster<>(tempClusterData, this));
                 checkAndDrop();
@@ -152,6 +153,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                         throw new InternalImnormException(e);
                     }
                 })
+                .map(s -> s.substring(s.indexOf(':') + 1))
                 .map(record -> gson.fromJson(record, type))
                 .collect(Collectors.toSet());
     }
@@ -233,7 +235,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 } else {
                     afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll().stream()
-                                    : readLines.stream().map(s -> gson.fromJson(s, type)),
+                                    : readLines.stream()
+                                    .map(s -> s.substring(s.indexOf(':') + 1))
+                                    .map(s -> gson.fromJson(s, type)),
                             startIndex,
                             rowCount);
                     result.addAll(afterSkippedClusterValues);
@@ -280,7 +284,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 } else {
                     afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll(transaction).stream()
-                                    : readLines.stream().map(s -> gson.fromJson(s, type)),
+                                    : readLines.stream()
+                                    .map(s -> s.substring(s.indexOf(':') + 1))
+                                    .map(s -> gson.fromJson(s, type)),
                             startIndex,
                             rowCount);
                     result.addAll(afterSkippedClusterValues);
@@ -313,6 +319,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                         throw new InternalImnormException(e);
                     }
                 })
+                .map(s -> s.substring(s.indexOf(':') + 1))
                 .map(record -> gson.fromJson(record, type))
                 .filter(condition::fitsCondition)
                 .collect(Collectors.toSet());
@@ -370,6 +377,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 records = (openClusters.containsKey(clusterName)
                         ? openClusters.get(clusterName).findAll().stream()
                         : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> s.substring(s.indexOf(':') + 1))
                         .map(s -> gson.fromJson(s, type)))
                         .filter(condition::fitsCondition)
                         .collect(Collectors.toList());
@@ -411,6 +419,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 records = (openClusters.containsKey(clusterName)
                         ? openClusters.get(clusterName).findAll(transaction).stream()
                         : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> s.substring(s.indexOf(':') + 1))
                         .map(s -> gson.fromJson(s, type)))
                         .filter(condition::fitsCondition)
                         .collect(Collectors.toList());
@@ -431,7 +440,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             throw new InternalImnormException(e);
         }
     }
-    
+
     /**
      * Clear current repository from file system and RAM
      *

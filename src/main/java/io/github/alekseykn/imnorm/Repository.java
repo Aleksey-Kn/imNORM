@@ -100,7 +100,14 @@ public abstract class Repository<Record> {
         recordId.setAccessible(true);
         getIdFromRecord = record -> {
             try {
-                return String.valueOf(recordId.get(record));
+                Object id = recordId.get(record);
+                String key = String.valueOf(id);
+                if (!(id instanceof Number)) {
+                    key = key.replaceAll("[\"\\\\|/*:?<>]", "_");
+                    if (key.length() > 255)
+                        key = key.substring(0, 240) + key.hashCode();
+                }
+                return key;
             } catch (IllegalAccessException e) {
                 throw new InternalImnormException(e);
             }
@@ -316,7 +323,7 @@ public abstract class Repository<Record> {
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
-        if(Objects.isNull(cluster)) {
+        if (Objects.isNull(cluster)) {
             createClusterForRecords(sortedRecords);
             return new HashSet<>(sortedRecords);
         } else {
@@ -344,7 +351,7 @@ public abstract class Repository<Record> {
      * Save records collection to data storage: add new records and update exists records.
      * All too large clusters split.
      *
-     * @param records Added records collection
+     * @param records     Added records collection
      * @param transaction Transaction, in which execute save
      * @return Incoming collection with changed ids, where necessary
      * @throws DeadLockException Current record lock from other transaction
@@ -355,7 +362,7 @@ public abstract class Repository<Record> {
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Cluster<Record> cluster = findCurrentClusterFromId(getIdFromRecord.apply(sortedRecords.get(0)));
-        if(Objects.isNull(cluster)) {
+        if (Objects.isNull(cluster)) {
             createClusterForRecords(sortedRecords);
             return new HashSet<>(sortedRecords);
         } else {
@@ -453,7 +460,7 @@ public abstract class Repository<Record> {
     /**
      * Find all records, suitable for the specified condition in current transaction
      *
-     * @param condition Condition for search
+     * @param condition   Condition for search
      * @param transaction Transaction, in which execute find
      * @return Suitable for the specified condition records, contains in current transaction
      * @throws DeadLockException Current record lock from other transaction
@@ -463,7 +470,7 @@ public abstract class Repository<Record> {
     /**
      * Find all records with pagination, suitable for the specified condition
      *
-     * @param condition Condition for search
+     * @param condition  Condition for search
      * @param startIndex Quantity skipped records from start collection
      * @param rowCount   Record quantity, which need return
      * @return Suitable for the specified condition records, contains in current diapason
@@ -474,7 +481,7 @@ public abstract class Repository<Record> {
     /**
      * Find all records with pagination, suitable for the specified condition in current transaction
      *
-     * @param condition Condition for search
+     * @param condition   Condition for search
      * @param startIndex  Quantity skipped records from start collection
      * @param rowCount    Record quantity, which need return
      * @param transaction Transaction, in which execute find
@@ -560,7 +567,7 @@ public abstract class Repository<Record> {
     /**
      * Save data from current repository to file system
      */
-    public void flush(){
+    public void flush() {
         if (needGenerateId) {
             try (DataOutputStream outputStream = new DataOutputStream(
                     new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {

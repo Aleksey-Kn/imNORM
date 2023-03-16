@@ -130,7 +130,7 @@ class TransactionTest {
                         .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
                 .flatMap(file -> {
                     try {
-                        return Files.lines(file.toPath());
+                        return Files.lines(file.toPath()).map(s -> s.substring(s.indexOf(':') + 1));
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -259,7 +259,7 @@ class TransactionTest {
                         .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
                 .flatMap(file -> {
                     try {
-                        return Files.lines(file.toPath());
+                        return Files.lines(file.toPath()).map(s -> s.substring(s.indexOf(':') + 1));
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }

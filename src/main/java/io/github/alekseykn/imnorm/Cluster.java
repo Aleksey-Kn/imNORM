@@ -276,7 +276,8 @@ public final class Cluster<Record> {
     void flush() {
         if (redacted) {
             try (PrintWriter printWriter = new PrintWriter(new File(repository.directory.getAbsolutePath(), firstKey))) {
-                findAll().forEach(record -> printWriter.println(repository.gson.toJson(record)));
+                data.forEach((key, record) ->
+                        printWriter.println(key.concat(":").concat(repository.gson.toJson(record))));
                 redacted = false;
             } catch (FileNotFoundException e) {
                 throw new InternalImnormException(e);
