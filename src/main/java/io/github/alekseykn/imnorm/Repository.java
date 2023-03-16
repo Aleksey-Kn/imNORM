@@ -106,6 +106,9 @@ public abstract class Repository<Record> {
         }
     }
 
+    /**
+     * Function for get data entity id as string
+     */
     protected String getIdFromRecord(Record record) {
         try {
             return getStringHashFromId(recordId.get(record));
@@ -114,6 +117,9 @@ public abstract class Repository<Record> {
         }
     }
 
+    /**
+     * Function for get string hash of id
+     */
     protected String getStringHashFromId(Object id) {
         String key = String.valueOf(id);
         if (!(id instanceof Number)) {
