@@ -138,12 +138,12 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         checkAndDrop();
     }
 
-    /**
+    **
      * Read data from not exists in RAM clusters. Used for findAll methods.
      *
      * @return Records from ot exists in RAM clusters
      */
-    private Set<Record> findRecordFromNotOpenClusters() {
+    private Stream<Record> findRecordFromNotOpenClusters() {
         return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
                 .flatMap(clusterName -> {
@@ -154,8 +154,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                     }
                 })
                 .map(s -> s.substring(s.indexOf(':') + 1))
-                .map(record -> gson.fromJson(record, type))
-                .collect(Collectors.toSet());
+                .map(record -> gson.fromJson(record, type));
     }
 
     /**
@@ -169,7 +168,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream())
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters());
+        result.addAll(findRecordFromNotOpenClusters().collect(Collectors.toSet()));
         return result;
     }
 
@@ -185,7 +184,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters());
+        result.addAll(findRecordFromNotOpenClusters().collect(Collectors.toSet()));
         return result;
     }
 
@@ -304,28 +303,6 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     /**
-     * Read data from not exists in RAM clusters and filter it's on specified condition. Used for findAll methods.
-     *
-     * @param condition Condition for filter
-     * @return Records from ot exists in RAM clusters
-     */
-    private Set<Record> findRecordFromNotOpenClusters(Condition<Record> condition) {
-        return clusterNames.parallelStream()
-                .filter(clusterName -> !openClusters.containsKey(clusterName))
-                .flatMap(clusterName -> {
-                    try {
-                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName));
-                    } catch (IOException e) {
-                        throw new InternalImnormException(e);
-                    }
-                })
-                .map(s -> s.substring(s.indexOf(':') + 1))
-                .map(record -> gson.fromJson(record, type))
-                .filter(condition::fitsCondition)
-                .collect(Collectors.toSet());
-    }
-
-    /**
      * Find all records in current repository, suitable for the specified condition
      *
      * @param condition Condition for search
@@ -337,7 +314,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream().filter(condition::fitsCondition))
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters(condition));
+        result.addAll(findRecordFromNotOpenClusters().filter(condition::fitsCondition).collect(Collectors.toSet()));
         return result;
     }
 
@@ -354,7 +331,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream().filter(condition::fitsCondition))
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters(condition));
+        result.addAll(findRecordFromNotOpenClusters().filter(condition::fitsCondition).collect(Collectors.toSet()));
         return result;
     }
 
@@ -440,7 +417,6 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             throw new InternalImnormException(e);
         }
     }
-
     /**
      * Clear current repository from file system and RAM
      *
