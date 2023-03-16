@@ -2,7 +2,7 @@ package io.github.alekseykn.imnorm;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import support.StringDto;
+import support.dto.StringDto;
 
 import java.math.BigInteger;
 import java.util.List;
