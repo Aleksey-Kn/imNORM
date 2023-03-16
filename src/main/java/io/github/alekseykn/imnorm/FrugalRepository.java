@@ -138,7 +138,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         checkAndDrop();
     }
 
-    **
+    /**
      * Read data from not exists in RAM clusters. Used for findAll methods.
      *
      * @return Records from ot exists in RAM clusters
@@ -417,6 +417,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             throw new InternalImnormException(e);
         }
     }
+    
     /**
      * Clear current repository from file system and RAM
      *
