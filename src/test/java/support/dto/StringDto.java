@@ -2,7 +2,7 @@ package support.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import ru.imnormproject.imnorm.annotations.Id;
+import io.github.alekseykn.imnorm.annotations.Id;
 
 @Getter
 @AllArgsConstructor
