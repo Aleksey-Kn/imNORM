@@ -31,16 +31,19 @@ public final class FastRepository<Record> extends Repository<Record> {
     FastRepository(final Class<Record> type, final File directory) {
         super(type, directory);
         Scanner scanner;
-        Record now;
+        String now;
         TreeMap<String, Record> tempClusterData;
+        int index;
+
         try {
             for (File file : Objects.requireNonNull(directory.listFiles((dir, name) ->
                     !name.equals("_sequence.imnorm")))) {
                 tempClusterData = new TreeMap<>();
                 scanner = new Scanner(file);
                 while (scanner.hasNextLine()) {
-                    now = gson.fromJson(scanner.nextLine(), type);
-                    tempClusterData.put(getIdFromRecord.apply(now), now);
+                    now = scanner.nextLine();
+                    index = now.indexOf(':');
+                    tempClusterData.put(now.substring(0, index), gson.fromJson(now.substring(index + 1), type));
                 }
                 data.put(file.getName(), new Cluster<>(tempClusterData, this));
                 scanner.close();
@@ -158,7 +161,7 @@ public final class FastRepository<Record> extends Repository<Record> {
                 startIndex -= clusterRecord.size();
             } else {
                 afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted(Comparator.comparing(getIdFromRecord))
+                        .sorted(Comparator.comparing(this::getIdFromRecord))
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());

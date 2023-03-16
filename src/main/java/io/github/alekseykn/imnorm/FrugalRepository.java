@@ -68,8 +68,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             try {
                 TreeMap<String, Record> tempClusterData = new TreeMap<>();
                 Files.lines(Path.of(directory.getAbsolutePath(), clusterId)).forEach(line -> {
-                    Record now = gson.fromJson(line, type);
-                    tempClusterData.put(getIdFromRecord.apply(now), now);
+                    int index = line.indexOf(':');
+                    tempClusterData.put(line.substring(0, index),
+                            gson.fromJson(line.substring(index + 1), type));
                 });
                 openClusters.put(clusterId, new Cluster<>(tempClusterData, this));
                 checkAndDrop();
@@ -142,7 +143,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      *
      * @return Records from ot exists in RAM clusters
      */
-    private Set<Record> findRecordFromNotOpenClusters() {
+    private Stream<Record> findRecordFromNotOpenClusters() {
         return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
                 .flatMap(clusterName -> {
@@ -152,8 +153,8 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                         throw new InternalImnormException(e);
                     }
                 })
-                .map(record -> gson.fromJson(record, type))
-                .collect(Collectors.toSet());
+                .map(s -> s.substring(s.indexOf(':') + 1))
+                .map(record -> gson.fromJson(record, type));
     }
 
     /**
@@ -167,7 +168,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream())
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters());
+        result.addAll(findRecordFromNotOpenClusters().collect(Collectors.toSet()));
         return result;
     }
 
@@ -183,7 +184,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters());
+        result.addAll(findRecordFromNotOpenClusters().collect(Collectors.toSet()));
         return result;
     }
 
@@ -198,7 +199,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      */
     private List<Record> pagination(final Stream<Record> clusterRecords, final int startIndex, final int rowCount) {
         return clusterRecords
-                .sorted(Comparator.comparing(getIdFromRecord))
+                .sorted(Comparator.comparing(this::getIdFromRecord))
                 .skip(startIndex)
                 .limit(rowCount)
                 .collect(Collectors.toList());
@@ -233,7 +234,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 } else {
                     afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll().stream()
-                                    : readLines.stream().map(s -> gson.fromJson(s, type)),
+                                    : readLines.stream()
+                                    .map(s -> s.substring(s.indexOf(':') + 1))
+                                    .map(s -> gson.fromJson(s, type)),
                             startIndex,
                             rowCount);
                     result.addAll(afterSkippedClusterValues);
@@ -280,7 +283,9 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 } else {
                     afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll(transaction).stream()
-                                    : readLines.stream().map(s -> gson.fromJson(s, type)),
+                                    : readLines.stream()
+                                    .map(s -> s.substring(s.indexOf(':') + 1))
+                                    .map(s -> gson.fromJson(s, type)),
                             startIndex,
                             rowCount);
                     result.addAll(afterSkippedClusterValues);
@@ -298,27 +303,6 @@ public final class FrugalRepository<Record> extends Repository<Record> {
     }
 
     /**
-     * Read data from not exists in RAM clusters and filter it's on specified condition. Used for findAll methods.
-     *
-     * @param condition Condition for filter
-     * @return Records from ot exists in RAM clusters
-     */
-    private Set<Record> findRecordFromNotOpenClusters(Condition<Record> condition) {
-        return clusterNames.parallelStream()
-                .filter(clusterName -> !openClusters.containsKey(clusterName))
-                .flatMap(clusterName -> {
-                    try {
-                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName));
-                    } catch (IOException e) {
-                        throw new InternalImnormException(e);
-                    }
-                })
-                .map(record -> gson.fromJson(record, type))
-                .filter(condition::fitsCondition)
-                .collect(Collectors.toSet());
-    }
-
-    /**
      * Find all records in current repository, suitable for the specified condition
      *
      * @param condition Condition for search
@@ -330,7 +314,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream().filter(condition::fitsCondition))
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters(condition));
+        result.addAll(findRecordFromNotOpenClusters().filter(condition::fitsCondition).collect(Collectors.toSet()));
         return result;
     }
 
@@ -347,7 +331,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream().filter(condition::fitsCondition))
                 .collect(Collectors.toSet());
-        result.addAll(findRecordFromNotOpenClusters(condition));
+        result.addAll(findRecordFromNotOpenClusters().filter(condition::fitsCondition).collect(Collectors.toSet()));
         return result;
     }
 
@@ -370,6 +354,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 records = (openClusters.containsKey(clusterName)
                         ? openClusters.get(clusterName).findAll().stream()
                         : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> s.substring(s.indexOf(':') + 1))
                         .map(s -> gson.fromJson(s, type)))
                         .filter(condition::fitsCondition)
                         .collect(Collectors.toList());
@@ -411,6 +396,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
                 records = (openClusters.containsKey(clusterName)
                         ? openClusters.get(clusterName).findAll(transaction).stream()
                         : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
+                        .map(s -> s.substring(s.indexOf(':') + 1))
                         .map(s -> gson.fromJson(s, type)))
                         .filter(condition::fitsCondition)
                         .collect(Collectors.toList());
