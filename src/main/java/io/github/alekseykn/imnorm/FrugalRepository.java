@@ -199,7 +199,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      */
     private List<Record> pagination(final Stream<Record> clusterRecords, final int startIndex, final int rowCount) {
         return clusterRecords
-                .sorted(Comparator.comparing(getIdFromRecord))
+                .sorted(Comparator.comparing(this::getIdFromRecord))
                 .skip(startIndex)
                 .limit(rowCount)
                 .collect(Collectors.toList());
