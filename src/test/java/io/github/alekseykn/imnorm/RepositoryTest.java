@@ -313,4 +313,9 @@ abstract class RepositoryTest {
                 .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 4, 3))
                 .extracting(Dto::getId).containsOnly(4, 5, 6);
     }
+
+    @Test
+    void size() {
+        assertThat(repository.size()).isEqualTo(3);
+    }
 }

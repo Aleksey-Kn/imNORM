@@ -311,6 +311,14 @@ public final class FastRepository<Record> extends Repository<Record> {
         data.values().forEach(Cluster::flush);
     }
 
+    /**
+     * @return Number of records in the repository
+     */
+    @Override
+    public long size() {
+        return data.values().stream().mapToInt(Cluster::size).sum();
+    }
+
     @Override
     protected synchronized void deleteClusterIfNeed(Cluster<Record> cluster) {
         if (cluster.isEmpty()) {
