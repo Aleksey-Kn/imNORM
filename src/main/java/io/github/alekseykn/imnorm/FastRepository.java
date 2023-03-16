@@ -161,7 +161,7 @@ public final class FastRepository<Record> extends Repository<Record> {
                 startIndex -= clusterRecord.size();
             } else {
                 afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted(Comparator.comparing(getIdFromRecord))
+                        .sorted(Comparator.comparing(this::getIdFromRecord))
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
