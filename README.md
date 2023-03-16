@@ -13,6 +13,7 @@ In-memory NoSQL ORM for Java, worked on file system.
 - Thread-safe CRUD functional, working on key-value data storage
 - Ability to control the memory allocated for repositories
 - Transactionality that ensures data integrity
+- The possibility of obtaining records by condition
 
 ## Building
 ```
