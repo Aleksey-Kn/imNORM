@@ -1,7 +1,7 @@
 package io.github.alekseykn.imnorm;
 
 import org.junit.jupiter.api.BeforeAll;
-import support.StringDto;
+import support.dto.StringDto;
 
 public class FrugalRepositoryHashKeyTest extends HashKeyTest{
     @BeforeAll
