@@ -417,7 +417,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
             throw new InternalImnormException(e);
         }
     }
-    
+
     /**
      * Clear current repository from file system and RAM
      *
@@ -438,6 +438,23 @@ public final class FrugalRepository<Record> extends Repository<Record> {
         super.flush();
         openClusters.values().forEach(Cluster::flush);
         openClusters.clear();
+    }
+
+    /**
+     * @return Number of records in the repository
+     */
+    @Override
+    public long size() {
+        return clusterNames.parallelStream()
+                .filter(clusterName -> !openClusters.containsKey(clusterName))
+                .mapToLong(clusterName -> {
+                    try {
+                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName)).count();
+                    } catch (IOException e) {
+                        throw new InternalImnormException(e);
+                    }
+                }).sum()
+                + openClusters.values().stream().mapToInt(Cluster::size).sum();
     }
 
     /**

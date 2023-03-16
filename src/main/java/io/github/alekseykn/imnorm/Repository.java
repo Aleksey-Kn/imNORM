@@ -2,20 +2,12 @@ package io.github.alekseykn.imnorm;
 
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.annotations.Id;
-import io.github.alekseykn.imnorm.exceptions.CountIdException;
-import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
-import io.github.alekseykn.imnorm.exceptions.IllegalGeneratedIdTypeException;
-import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
-import io.github.alekseykn.imnorm.exceptions.RepositoryWasLockedException;
+import io.github.alekseykn.imnorm.exceptions.*;
+import io.github.alekseykn.imnorm.where.Condition;
 
 import java.io.*;
 import java.lang.reflect.Field;
 import java.util.*;
-
-import io.github.alekseykn.imnorm.exceptions.DeadLockException;
-import io.github.alekseykn.imnorm.where.Condition;
-
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -582,6 +574,11 @@ public abstract class Repository<Record> {
             }
         }
     }
+
+    /**
+     * @return Number of records in the repository
+     */
+    public abstract long size();
 
     /**
      * Checks if the cluster needs to be split and splits it if necessary
