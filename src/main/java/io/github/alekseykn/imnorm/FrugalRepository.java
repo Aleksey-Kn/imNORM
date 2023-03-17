@@ -444,7 +444,7 @@ public final class FrugalRepository<Record> extends Repository<Record> {
      * @return Number of records in the repository
      */
     @Override
-    public long size() {
+    public synchronized long size() {
         return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
                 .mapToLong(clusterName -> {
