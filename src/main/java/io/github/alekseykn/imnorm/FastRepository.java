@@ -315,7 +315,7 @@ public final class FastRepository<Record> extends Repository<Record> {
      * @return Number of records in the repository
      */
     @Override
-    public long size() {
+    public synchronized long size() {
         return data.values().stream().mapToInt(Cluster::size).sum();
     }
 
