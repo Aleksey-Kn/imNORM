@@ -210,12 +210,8 @@ public abstract class Repository<Record> {
         Cluster<Record> cluster = findCurrentClusterFromId(id);
 
         if (Objects.nonNull(cluster)) {
-            if (cluster.containsKey(id)) {
-                cluster.set(id, record);
-            } else {
-                cluster.set(id, record);
-                splitClusterIfNeed(cluster);
-            }
+            cluster.set(id, record);
+            splitClusterIfNeed(cluster);
         } else {
             createClusterForRecord(id, record);
         }
@@ -248,12 +244,11 @@ public abstract class Repository<Record> {
     }
 
     /**
-     * Create new cluster from current record list
+     * Add new cluster and insert current collection in it
      *
-     * @param records Records for insert to cluster
-     * @return Cluster, which contains current records list
+     * @param records Records, for which needed to create new cluster
      */
-    protected Cluster<Record> createClusterFromList(final List<Record> records) {
+    protected Cluster<Record> createClusterForRecords(List<Record> records) {
         TreeMap<String, Record> inputData = new TreeMap<>();
         for (Record record : records) {
             inputData.put(getIdFromRecord(record), record);
@@ -262,35 +257,19 @@ public abstract class Repository<Record> {
     }
 
     /**
-     * Create new cluster from current record list in current transaction
+     * Add new cluster and insert current collection in current transaction
      *
-     * @param records     Records for insert to cluster
+     * @param records     Records, for which needed to create new cluster
      * @param transaction Transaction, in which execute create
-     * @return Cluster, which contains current records list
      */
-    protected Cluster<Record> createClusterFromList(final List<Record> records, final Transaction transaction) {
+    protected Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
         TreeMap<String, Record> inputData = new TreeMap<>();
         for (Record record : records) {
             inputData.put(getIdFromRecord(record), record);
         }
         return new Cluster<>(inputData, this, transaction);
     }
-
-    /**
-     * Add new cluster and insert current collection in it
-     *
-     * @param records Records, for which needed to create new cluster
-     */
-    protected abstract void createClusterForRecords(List<Record> records);
-
-    /**
-     * Add new cluster and insert current collection in current transaction
-     *
-     * @param records     Records, for which needed to create new cluster
-     * @param transaction Transaction, in which execute create
-     */
-    protected abstract void createClusterForRecords(List<Record> records, Transaction transaction);
-
+    
     /**
      * Make sorted by id list and change record id, where necessary
      *
