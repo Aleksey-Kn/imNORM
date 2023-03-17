@@ -99,10 +99,11 @@ public final class FastRepository<Record> extends Repository<Record> {
      * @param records Records, for which needed to create new cluster
      */
     @Override
-    protected void createClusterForRecords(List<Record> records) {
-        Cluster<Record> cluster = createClusterFromList(records);
+    protected Cluster<Record> createClusterForRecords(List<Record> records) {
+        Cluster<Record> cluster = super.createClusterForRecords(records);
         data.put(cluster.getFirstKey(), cluster);
         splitClusterIfNeed(cluster);
+        return cluster;
     }
 
     /**
@@ -112,10 +113,11 @@ public final class FastRepository<Record> extends Repository<Record> {
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected void createClusterForRecords(List<Record> records, Transaction transaction) {
-        Cluster<Record> cluster = createClusterFromList(records, transaction);
+    protected Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
+        Cluster<Record> cluster = super.createClusterForRecords(records, transaction);
         data.put(cluster.getFirstKey(), cluster);
         splitClusterIfNeed(cluster);
+        return cluster;
     }
 
     /**
