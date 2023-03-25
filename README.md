@@ -22,5 +22,14 @@ cd imNORM
 mvn install
 ```
 
+## Download with Maven
+```
+<dependency>
+    <groupId>io.github.alekseykn</groupId>
+    <artifactId>imnorm</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
 ## Issue tracking
 Found a bug? Have an idea for an improvement? Feel free to [file an issue.](https://github.com/Aleksey-Kn/imNORM/issues)
