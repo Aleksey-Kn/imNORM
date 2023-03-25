@@ -4,6 +4,7 @@ import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.extern.java.Log;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -19,6 +20,7 @@ import java.util.*;
  * @param <Record> Type of entity for this cluster
  * @author Aleksey-Kn
  */
+@Log
 public final class Cluster<Record> {
     /**
      * Repository, to which belongs this cluster
@@ -226,16 +228,6 @@ public final class Cluster<Record> {
     }
 
     /**
-     * Checking the contents of a record records with current string identifier
-     *
-     * @param key String identifier
-     * @return True if cluster contains records with current string identifier
-     */
-    boolean containsKey(final String key) {
-        return data.containsKey(key);
-    }
-
-    /**
      * @return The minimum identifier allowed for storage in this cluster
      */
     String getFirstKey() {
@@ -319,7 +311,10 @@ public final class Cluster<Record> {
             if (Objects.nonNull(copyDataForTransactions)) {
                 try {
                     waitingTransactionCount++;
-                    repository.wait(transaction.getWaitTime());
+                    long waitLimit = System.currentTimeMillis() + transaction.getWaitTime();
+                    while (System.currentTimeMillis() < waitLimit && Objects.nonNull(copyDataForTransactions)) {
+                        repository.wait(50);
+                    }
                     waitingTransactionCount--;
                 } catch (InterruptedException e) {
                     throw new InternalImnormException(e);
@@ -346,7 +341,7 @@ public final class Cluster<Record> {
                 repository.splitClusterIfNeed(this);
                 repository.deleteClusterIfNeed(this);
             }
-            repository.notify();
+            repository.notifyAll();
         }
     }
 
@@ -356,7 +351,7 @@ public final class Cluster<Record> {
     void rollback() {
         copyDataForTransactions = null;
         synchronized (repository) {
-            repository.notify();
+            repository.notifyAll();
         }
     }
 

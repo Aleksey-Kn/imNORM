@@ -65,7 +65,7 @@ class CompareModeTest {
 
     @Test
     void checkConditionFromLessModeShouldReturnFalse() {
-        assertThat(CompareMode.LESS.checkCondition(LocalTime.now(), LocalTime.now().plusHours(2))).isFalse();
+        assertThat(CompareMode.LESS.checkCondition(LocalTime.now(), LocalTime.now().plusMinutes(2))).isFalse();
     }
 
     @Test
