@@ -5,8 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.alekseykn</groupId>
-    <artifactId>imNORM</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <artifactId>imnorm</artifactId>
+    <version>1.0.0</version>
 
     <properties>
         <maven.compiler.source>15</maven.compiler.source>
@@ -117,4 +117,13 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub aleksey-kn Apache Maven Packages</name>
+            <url>https://maven.pkg.github.com/aleksey-kn/imnorm</url>
+        </repository>
+    </distributionManagement>
+
 </project>
