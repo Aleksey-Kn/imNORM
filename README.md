@@ -27,7 +27,7 @@ mvn install
 <dependency>
     <groupId>io.github.alekseykn</groupId>
     <artifactId>imnorm</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
