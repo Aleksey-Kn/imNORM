@@ -13,14 +13,6 @@
         <maven.compiler.target>15</maven.compiler.target>
     </properties>
 
-    <distributionManagement>
-        <repository>
-            <id>github</id>
-            <name>GitHub aleksey-kn Apache Maven Packages</name>
-            <url>https://maven.pkg.github.com/aleksey-kn/imnorm</url>
-        </repository>
-    </distributionManagement>
-
     <dependencies>
         <!-- Gson -->
         <dependency>
@@ -125,4 +117,13 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub aleksey-kn Apache Maven Packages</name>
+            <url>https://maven.pkg.github.com/aleksey-kn/imnorm</url>
+        </repository>
+    </distributionManagement>
+
 </project>
