@@ -173,11 +173,11 @@ class TransactionTest {
     @Test
     @SneakyThrows
     void saveShouldWorkWithTwoThreadWritingInOneClusterFromWaitTransactionsWithoutDeadLockWithLongTimeWait() {
-        Set<Integer> first = Stream.iterate(1000, integer -> integer + 1)
-                .limit(100)
+        Set<Integer> first = Stream.iterate(1_000_000, integer -> integer + 1)
+                .limit(10000)
                 .collect(Collectors.toSet());
-        Set<Integer> second = Stream.iterate(1060, integer -> integer + 1)
-                .limit(100)
+        Set<Integer> second = Stream.iterate(1_006_000, integer -> integer + 1)
+                .limit(10000)
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> {
@@ -197,7 +197,9 @@ class TransactionTest {
 
         assertThat(repository.findAll())
                 .extracting(Dto::getId)
-                .containsAll(Stream.iterate(1000, integer -> integer + 1).limit(160).collect(Collectors.toSet()));
+                .containsAll(Stream.iterate(1_000_000, integer -> integer + 1)
+                        .limit(16_000)
+                        .collect(Collectors.toSet()));
     }
 
     @Test
@@ -264,9 +266,9 @@ class TransactionTest {
                         throw new RuntimeException(e);
                     }
                 })).containsAll(Stream.iterate(40, integer -> integer + 1)
-                        .limit(100)
-                        .map(integer -> gson.toJson(new Dto(integer)))
-                        .collect(Collectors.toSet()));
+                .limit(100)
+                .map(integer -> gson.toJson(new Dto(integer)))
+                .collect(Collectors.toSet()));
     }
 
     @Test
