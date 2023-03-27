@@ -74,6 +74,7 @@ public class DataStorage {
 
     private DataStorage(Path path) {
         nowPath = path;
+        executedMigrations = new File(path.toFile(), "executed_migrations.imnorm");
     }
 
     /**
@@ -234,7 +235,7 @@ public class DataStorage {
     private Optional<Exception> registerAndExecuteMigration(String migrationId, BiConsumer<DataStorage,
             Transaction> migration) throws IOException {
         Optional<Exception> executeResult = Transaction
-                .executeInWaitingTransactionWithReply(transaction -> migration.accept(this, transaction));
+                .executeInWaitingTransactionWithRetry(transaction -> migration.accept(this, transaction));
 
         if (executeResult.isEmpty()) {
             PrintWriter printWriter = new PrintWriter(new FileWriter(executedMigrations, true));

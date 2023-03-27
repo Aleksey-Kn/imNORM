@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -362,7 +363,7 @@ class TransactionTest {
         Set<Boolean> flags = new HashSet<>();
         flags.add(true);
 
-        Transaction.executeInWaitingTransactionWithReply(transaction -> {
+        Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             if (flags.isEmpty()) {
                 repository.save(new Dto(1), transaction);
             } else {
@@ -378,7 +379,7 @@ class TransactionTest {
     void executeInWaitingTransactionWithReplyWithRuntimeExceptionThrowCurrentExceptionAndNotSaveChanges() {
         repository.deleteAll();
         
-        assertThat(Transaction.executeInWaitingTransactionWithReply(transaction -> {
+        assertThat(Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             repository.save(new Dto(1), transaction);
             throw new RuntimeException("Test");
         })).isPresent().get().isInstanceOf(RuntimeException.class);
@@ -389,7 +390,7 @@ class TransactionTest {
     void executeInWaitingTransactionWithReplyWithNotRuntimeExceptionThrowCurrentExceptionAndNotSaveChanges() {
         repository.deleteAll();
         
-        assertThat(Transaction.executeInWaitingTransactionWithReply(transaction -> {
+        assertThat(Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             try {
                 repository.save(new Dto(1), transaction);
                 repository.save(new Dto(2), transaction);

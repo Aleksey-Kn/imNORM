@@ -6,7 +6,10 @@ import io.github.alekseykn.imnorm.exceptions.TransactionWasClosedException;
 import lombok.AccessLevel;
 import lombok.Getter;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -39,13 +42,9 @@ public class Transaction {
         Thread remover = new Thread(() -> {
             try {
                 Thread.sleep(2000);
-                Iterator<Transaction> iterator = openTransactions.iterator();
-                Transaction now;
-                while (iterator.hasNext()) {
-                    now = iterator.next();
-                    if (now.callingThreadIsDye()) {
-                        now.rollback();
-                        iterator.remove();
+                for (Transaction transaction : openTransactions) {
+                    if (transaction.callingThreadIsDye()) {
+                        transaction.rollback();
                     }
                 }
             } catch (InterruptedException e) {
@@ -139,6 +138,7 @@ public class Transaction {
                 transaction.commitAndFlush();
                 return Optional.empty();
             } catch (DeadLockException ignore) {
+                transaction.rollback();
             } catch (Exception e) {
                 transaction.rollback();
                 return Optional.of(e);
@@ -205,14 +205,7 @@ public class Transaction {
      * @throws TransactionWasClosedException Accessing a transaction after it is closed
      */
     public void commit() {
-        if (Objects.isNull(blockingClusters))
-            throw new TransactionWasClosedException();
-        blockingClusters.forEach(Cluster::commit);
-        blockingClusters = null;
-        openTransactions.remove(this);
-        synchronized (mutex) {
-            mutex.notify();
-        }
+        unlock(Cluster::commit);
     }
 
     /**
@@ -238,14 +231,7 @@ public class Transaction {
      * @throws TransactionWasClosedException Accessing a transaction after it is closed
      */
     public void rollback() {
-        if (Objects.isNull(blockingClusters))
-            throw new TransactionWasClosedException();
-        blockingClusters.forEach(Cluster::rollback);
-        blockingClusters = null;
-        openTransactions.remove(this);
-        synchronized (mutex) {
-            mutex.notify();
-        }
+        unlock(Cluster::rollback);
     }
 
     /**
@@ -255,6 +241,23 @@ public class Transaction {
      */
     private boolean callingThreadIsDye() {
         return !callingThread.isAlive();
+    }
+
+    /**
+     * Unlock clusters with current method
+     *
+     * @param clusterOperation Current method, call with all blocking cluster
+     * @throws TransactionWasClosedException Accessing a transaction after it is closed
+     */
+    private void unlock(Consumer<Cluster<?>> clusterOperation) {
+        if (Objects.isNull(blockingClusters))
+            throw new TransactionWasClosedException();
+        blockingClusters.forEach(clusterOperation);
+        blockingClusters = null;
+        openTransactions.remove(this);
+        synchronized (mutex) {
+            mutex.notify();
+        }
     }
 }
 
