@@ -22,13 +22,47 @@ cd imNORM
 mvn install
 ```
 
-## Download with Maven
+## Download with Maven from GtHub packages
 ```
 <dependency>
     <groupId>io.github.alekseykn</groupId>
     <artifactId>imnorm</artifactId>
     <version>1.1.0</version>
 </dependency>
+```
+
+Added in settings.xml (/user/.m2)
+```
+<activeProfiles>
+    <activeProfile>github</activeProfile>
+</activeProfiles>
+
+<profiles>
+    <profile>
+      <id>github</id>
+      <repositories>
+        <repository>
+          <id>central</id>
+          <url>https://repo1.maven.org/maven2</url>
+        </repository>
+        <repository>
+          <id>github</id>
+          <url>https://maven.pkg.github.com/aleksey-kn/imnorm</url>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+    </profile>
+</profiles>
+
+<servers>
+    <server>
+      <id>github</id>
+      <username>USERNAME</username>
+      <password>TOKEN</password>
+    </server>
+</servers>
 ```
 
 ## Issue tracking
