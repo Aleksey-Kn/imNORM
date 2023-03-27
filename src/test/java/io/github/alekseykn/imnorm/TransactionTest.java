@@ -3,6 +3,7 @@ package io.github.alekseykn.imnorm;
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import lombok.SneakyThrows;
+import lombok.extern.java.Log;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
@@ -20,6 +21,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@Log
 class TransactionTest {
     private final Repository<Dto> repository = DataStorage.getDataStorage().getRepositoryForClass(Dto.class);
     private final Gson gson = new Gson();
@@ -356,21 +358,24 @@ class TransactionTest {
 
         assertThat(repository.findAll().size()).isEqualTo(200);
     }
-    
+
     @Test
+    @SneakyThrows
     void executeInWaitingTransactionWithReplyWithDeadLockRetry() {
         repository.deleteAll();
         Set<Boolean> flags = new HashSet<>();
         flags.add(true);
 
-        Transaction.executeInWaitingTransactionWithRetry(transaction -> {
+        Thread thread = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             if (flags.isEmpty()) {
                 repository.save(new Dto(1), transaction);
             } else {
                 flags.clear();
                 throw new DeadLockException("Test");
             }
-        });
+        }));
+        thread.start();
+        thread.join();
 
         assertThat(repository.size()).isEqualTo(1);
     }
@@ -378,7 +383,7 @@ class TransactionTest {
     @Test
     void executeInWaitingTransactionWithReplyWithRuntimeExceptionThrowCurrentExceptionAndNotSaveChanges() {
         repository.deleteAll();
-        
+
         assertThat(Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             repository.save(new Dto(1), transaction);
             throw new RuntimeException("Test");
@@ -389,7 +394,7 @@ class TransactionTest {
     @Test
     void executeInWaitingTransactionWithReplyWithNotRuntimeExceptionThrowCurrentExceptionAndNotSaveChanges() {
         repository.deleteAll();
-        
+
         assertThat(Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             try {
                 repository.save(new Dto(1), transaction);

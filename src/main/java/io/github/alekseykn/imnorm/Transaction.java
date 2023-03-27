@@ -40,15 +40,13 @@ public class Transaction {
 
     static {
         Thread remover = new Thread(() -> {
-            try {
-                Thread.sleep(2000);
-                for (Transaction transaction : openTransactions) {
-                    if (transaction.callingThreadIsDye()) {
-                        transaction.rollback();
-                    }
+            while (true) {
+                try {
+                    Thread.sleep(2000);
+                    openTransactions.stream().filter(Transaction::callingThreadIsDye).forEach(Transaction::rollback);
+                } catch (InterruptedException e) {
+                    throw new InternalImnormException(e);
                 }
-            } catch (InterruptedException e) {
-                throw new InternalImnormException(e);
             }
         });
         remover.setDaemon(true);
@@ -138,7 +136,7 @@ public class Transaction {
                 transaction.commitAndFlush();
                 return Optional.empty();
             } catch (DeadLockException ignore) {
-                transaction.rollback();
+                // In this case transaction already rollback in Cluster.lock
             } catch (Exception e) {
                 transaction.rollback();
                 return Optional.of(e);
