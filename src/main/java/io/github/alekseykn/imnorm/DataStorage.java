@@ -61,6 +61,11 @@ public class DataStorage {
      * Absolute path to current data storage
      */
     private final Path nowPath;
+    
+     /**
+     * Storage of executed migrations names
+     */
+    private final File executedMigrations;
 
     /**
      * Collection repository, contains in current repository
