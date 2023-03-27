@@ -4,10 +4,16 @@ import io.github.alekseykn.imnorm.exceptions.CreateDataStorageException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * Container for repository. Need for create new repository and determines their location in the file system.
@@ -55,6 +61,11 @@ public class DataStorage {
      * Absolute path to current data storage
      */
     private final Path nowPath;
+    
+     /**
+     * Storage of executed migrations names
+     */
+    private final File executedMigrations;
 
     /**
      * Collection repository, contains in current repository
@@ -63,6 +74,7 @@ public class DataStorage {
 
     private DataStorage(Path path) {
         nowPath = path;
+        executedMigrations = new File(path.toFile(), "executed_migrations.imnorm");
     }
 
     /**
@@ -184,6 +196,53 @@ public class DataStorage {
      */
     private long usedMemory() {
         return Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+    }
+    
+    /**
+     * Execute current queries, if this migration not executed earlier on this device.
+     * If throw exception from migration, migration will rollback.
+     *
+     * @param migrationId Migration identifier, which determines whether the migration was performed earlier
+     * @param migration   Calls to the data warehouse that will be performed as part of the migration
+     * @return Exception, if migration throw exception. Optional.empty() if procedure completed correctly.
+     */
+    public Optional<Exception> executeMigration(String migrationId, BiConsumer<DataStorage, Transaction> migration) {
+        try {
+            if (executedMigrations.exists()) {
+                if (Files.lines(executedMigrations.toPath()).noneMatch(line -> line.equals(migrationId))) {
+                    return registerAndExecuteMigration(migrationId, migration);
+                } else
+                    return Optional.empty();
+            } else {
+                if (!executedMigrations.createNewFile())
+                    throw new InternalImnormException("Create new file: " + executedMigrations.getPath());
+                return registerAndExecuteMigration(migrationId, migration);
+            }
+        } catch (IOException e) {
+            throw new InternalImnormException(e);
+        }
+    }
+
+    /**
+     * Execute migration and save its id.
+     * If throw exception from migration, migration will rollback.
+     *
+     * @param migrationId Migration identifier, which determines whether the migration was performed earlier
+     * @param migration   Calls to the data warehouse that will be performed as part of the migration
+     * @return Exception, if migration throw exception. Optional.empty() if procedure completed correctly.
+     * @throws IOException Exception with save migration id to file system
+     */
+    private Optional<Exception> registerAndExecuteMigration(String migrationId, BiConsumer<DataStorage,
+            Transaction> migration) throws IOException {
+        Optional<Exception> executeResult = Transaction
+                .executeInWaitingTransactionWithRetry(transaction -> migration.accept(this, transaction));
+
+        if (executeResult.isEmpty()) {
+            PrintWriter printWriter = new PrintWriter(new FileWriter(executedMigrations, true));
+            printWriter.println(migrationId);
+            printWriter.close();
+        }
+        return executeResult;
     }
 }
 

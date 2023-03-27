@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  * @param <Record> Type of entity for this repository
  * @author Aleksey-Kn
  */
-public final class FastRepository<Record> extends Repository<Record> {
+public class FastRepository<Record> extends Repository<Record> {
     /**
      * The search tree where clusters and their initial keys are mapped
      */

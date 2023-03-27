@@ -18,7 +18,7 @@ import io.github.alekseykn.imnorm.where.Condition;
  * @param <Record> Type of entity for this repository
  * @author Aleksey-Kn
  */
-public final class FrugalRepository<Record> extends Repository<Record> {
+public class FrugalRepository<Record> extends Repository<Record> {
     /**
      * Set of exists clusters in file data storage
      */

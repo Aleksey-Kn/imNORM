@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -354,5 +355,51 @@ class TransactionTest {
         thread2.join();
 
         assertThat(repository.findAll().size()).isEqualTo(200);
+    }
+    
+    @Test
+    void executeInWaitingTransactionWithReplyWithDeadLockRetry() {
+        repository.deleteAll();
+        Set<Boolean> flags = new HashSet<>();
+        flags.add(true);
+
+        Transaction.executeInWaitingTransactionWithRetry(transaction -> {
+            if (flags.isEmpty()) {
+                repository.save(new Dto(1), transaction);
+            } else {
+                flags.clear();
+                throw new DeadLockException("Test");
+            }
+        });
+
+        assertThat(repository.size()).isEqualTo(1);
+    }
+
+    @Test
+    void executeInWaitingTransactionWithReplyWithRuntimeExceptionThrowCurrentExceptionAndNotSaveChanges() {
+        repository.deleteAll();
+        
+        assertThat(Transaction.executeInWaitingTransactionWithRetry(transaction -> {
+            repository.save(new Dto(1), transaction);
+            throw new RuntimeException("Test");
+        })).isPresent().get().isInstanceOf(RuntimeException.class);
+        assertThat(repository.size()).isEqualTo(0);
+    }
+
+    @Test
+    void executeInWaitingTransactionWithReplyWithNotRuntimeExceptionThrowCurrentExceptionAndNotSaveChanges() {
+        repository.deleteAll();
+        
+        assertThat(Transaction.executeInWaitingTransactionWithRetry(transaction -> {
+            try {
+                repository.save(new Dto(1), transaction);
+                repository.save(new Dto(2), transaction);
+                repository.save(new Dto(20), transaction);
+                throw new Exception("Test");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        })).isPresent().get().isInstanceOf(RuntimeException.class);
+        assertThat(repository.size()).isEqualTo(0);
     }
 }
