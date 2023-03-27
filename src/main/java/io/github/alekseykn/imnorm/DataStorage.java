@@ -185,5 +185,52 @@ public class DataStorage {
     private long usedMemory() {
         return Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
     }
+    
+    /**
+     * Execute current queries, if this migration not executed earlier on this device.
+     * If throw exception from migration, migration will rollback.
+     *
+     * @param migrationId Migration identifier, which determines whether the migration was performed earlier
+     * @param migration   Calls to the data warehouse that will be performed as part of the migration
+     * @return Exception, if migration throw exception. Optional.empty() if procedure completed correctly.
+     */
+    public Optional<Exception> executeMigration(String migrationId, BiConsumer<DataStorage, Transaction> migration) {
+        try {
+            if (executedMigrations.exists()) {
+                if (Files.lines(executedMigrations.toPath()).noneMatch(line -> line.equals(migrationId))) {
+                    return registerAndExecuteMigration(migrationId, migration);
+                } else
+                    return Optional.empty();
+            } else {
+                if (!executedMigrations.createNewFile())
+                    throw new InternalImnormException("Create new file: " + executedMigrations.getPath());
+                return registerAndExecuteMigration(migrationId, migration);
+            }
+        } catch (IOException e) {
+            throw new InternalImnormException(e);
+        }
+    }
+
+    /**
+     * Execute migration and save its id.
+     * If throw exception from migration, migration will rollback.
+     *
+     * @param migrationId Migration identifier, which determines whether the migration was performed earlier
+     * @param migration   Calls to the data warehouse that will be performed as part of the migration
+     * @return Exception, if migration throw exception. Optional.empty() if procedure completed correctly.
+     * @throws IOException Exception with save migration id to file system
+     */
+    private Optional<Exception> registerAndExecuteMigration(String migrationId, BiConsumer<DataStorage,
+            Transaction> migration) throws IOException {
+        Optional<Exception> executeResult = Transaction
+                .executeInWaitingTransactionWithReply(transaction -> migration.accept(this, transaction));
+
+        if (executeResult.isEmpty()) {
+            PrintWriter printWriter = new PrintWriter(new FileWriter(executedMigrations, true));
+            printWriter.println(migrationId);
+            printWriter.close();
+        }
+        return executeResult;
+    }
 }
 
