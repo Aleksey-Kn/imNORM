@@ -14,6 +14,7 @@ In-memory NoSQL ORM for Java, worked on file system.
 - Ability to control the memory allocated for repositories
 - Transactionality that ensures data integrity
 - The possibility of obtaining records by condition
+- Create migrations
 
 ## Building
 ```
