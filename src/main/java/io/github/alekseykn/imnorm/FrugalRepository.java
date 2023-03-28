@@ -65,9 +65,9 @@ public class FrugalRepository<Record> extends Repository<Record> {
             if (Objects.isNull(clusterId)) {
                 return null;
             }
-            try {
+            try(Stream<String> stream = Files.lines(Path.of(directory.getAbsolutePath(), clusterId))) {
                 TreeMap<String, Record> tempClusterData = new TreeMap<>();
-                Files.lines(Path.of(directory.getAbsolutePath(), clusterId)).forEach(line -> {
+                stream.forEach(line -> {
                     int index = line.indexOf(':');
                     tempClusterData.put(line.substring(0, index),
                             gson.fromJson(line.substring(index + 1), type));
@@ -449,8 +449,8 @@ public class FrugalRepository<Record> extends Repository<Record> {
         return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
                 .mapToLong(clusterName -> {
-                    try {
-                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName)).count();
+                    try(Stream<String> stream = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))) {
+                        return stream.count();
                     } catch (IOException e) {
                         throw new InternalImnormException(e);
                     }
