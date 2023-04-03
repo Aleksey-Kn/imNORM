@@ -318,4 +318,14 @@ abstract class RepositoryTest {
     void size() {
         assertThat(repository.size()).isEqualTo(3);
     }
+    
+    @Test
+    void existsByIdMustReturnTrue() {
+        assertTrue(repository.existsById(5));
+    }
+
+    @Test
+    void existsByIdMustReturnFalse() {
+        assertFalse(repository.existsById(2));
+    }
 }
