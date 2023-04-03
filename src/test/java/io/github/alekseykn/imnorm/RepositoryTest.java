@@ -18,8 +18,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 abstract class RepositoryTest {
     protected static Repository<Dto> repository;
@@ -323,11 +321,11 @@ abstract class RepositoryTest {
     
     @Test
     void existsByIdMustReturnTrue() {
-        assertTrue(repository.existsById(5));
+        assertThat(repository.existsById(5)).isTrue();
     }
 
     @Test
     void existsByIdMustReturnFalse() {
-        assertFalse(repository.existsById(2));
+        assertThat(repository.existsById(2)).isFalse();
     }
 }
