@@ -497,4 +497,30 @@ public class FrugalRepository<Record> extends Repository<Record> {
             openClusters.remove(cluster.getFirstKey());
         }
     }
+    
+    /**
+     * Checks the existence of a record with the specified id
+     *
+     * @param id The id being checked
+     * @return True, if record is exist
+     */
+    @Override
+    protected boolean existsById(final Object id) {
+        String stringId = getStringHashFromId(id);
+        if(stringId.compareTo(clusterNames.first()) > 0) {
+            String clusterName = clusterNames.floor(stringId);
+            Cluster<Record> cluster = openClusters.get(clusterName);
+            if(Objects.nonNull(cluster)) {
+                return cluster.containsKey(stringId);
+            } else {
+                try (Stream<String> stream = Files.lines(Path.of(directory.getPath(), clusterName))) {
+                    return stream.map(s -> s.substring(0, s.indexOf(':'))).anyMatch(s -> s.equals(stringId));
+                } catch (IOException e) {
+                    throw new InternalImnormException(e);
+                }
+            }
+        } else {
+            return false;
+        }
+    }
 }
