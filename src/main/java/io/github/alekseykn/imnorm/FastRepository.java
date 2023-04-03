@@ -339,4 +339,19 @@ public class FastRepository<Record> extends Repository<Record> {
             data.put(newCluster.getFirstKey(), newCluster);
         }
     }
+    
+    /**
+     * Checks the existence of a record with the specified id
+     *
+     * @param id The id being checked
+     * @return True, if record is exist
+     */
+    @Override
+    protected boolean existsById(final Object id) {
+        String stringId = getStringHashFromId(id);
+        if(stringId.compareTo(data.firstKey()) > 0)
+            return data.floorEntry(stringId).getValue().containsKey(stringId);
+        else
+            return false;
+    }
 }
