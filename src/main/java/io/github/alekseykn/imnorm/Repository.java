@@ -587,4 +587,12 @@ public abstract class Repository<Record> {
         if (locked)
             throw new RepositoryWasLockedException();
     }
+    
+    /**
+     * Checks the existence of a record with the specified id
+     *
+     * @param id The id being checked
+     * @return True, if record is exist
+     */
+    protected abstract boolean existsById(Object id);
 }
