@@ -233,6 +233,16 @@ public final class Cluster<Record> {
     String getFirstKey() {
         return firstKey;
     }
+    
+    /**
+     * Checking the contents of a record records with current string identifier
+     *
+     * @param key String identifier
+     * @return True if cluster contains records with current string identifier
+     */
+    boolean containsKey(final String key) {
+        return data.containsKey(key);
+    }
 
     /**
      * @return True if cluster not contains records
