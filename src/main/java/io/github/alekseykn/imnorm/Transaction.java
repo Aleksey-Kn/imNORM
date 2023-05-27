@@ -212,13 +212,13 @@ public class Transaction {
      * @throws TransactionWasClosedException Accessing a transaction after it is closed
      */
     public void commitAndFlush() {
-        if (Objects.isNull(blockingClusters))
-            throw new TransactionWasClosedException();
-        blockingClusters.forEach(Cluster::commit);
-        blockingClusters.stream().map(Cluster::getRepository).distinct().forEach(Repository::flush);
-        blockingClusters = null;
-        openTransactions.remove(this);
         synchronized (mutex) {
+            if (Objects.isNull(blockingClusters))
+                throw new TransactionWasClosedException();
+            blockingClusters.forEach(Cluster::commit);
+            blockingClusters.stream().map(Cluster::getRepository).distinct().forEach(Repository::flush);
+            blockingClusters = null;
+            openTransactions.remove(this);
             mutex.notify();
         }
     }
@@ -248,12 +248,12 @@ public class Transaction {
      * @throws TransactionWasClosedException Accessing a transaction after it is closed
      */
     private void unlock(Consumer<Cluster<?>> clusterOperation) {
-        if (Objects.isNull(blockingClusters))
-            throw new TransactionWasClosedException();
-        blockingClusters.forEach(clusterOperation);
-        blockingClusters = null;
-        openTransactions.remove(this);
         synchronized (mutex) {
+            if (Objects.isNull(blockingClusters))
+                throw new TransactionWasClosedException();
+            blockingClusters.forEach(clusterOperation);
+            blockingClusters = null;
+            openTransactions.remove(this);
             mutex.notify();
         }
     }

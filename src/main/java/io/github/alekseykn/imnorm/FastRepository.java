@@ -4,7 +4,9 @@ import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import io.github.alekseykn.imnorm.where.Condition;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -45,7 +47,7 @@ public class FastRepository<Record> extends Repository<Record> {
                     index = now.indexOf(':');
                     tempClusterData.put(now.substring(0, index), gson.fromJson(now.substring(index + 1), type));
                 }
-                data.put(file.getName(), new Cluster<>(tempClusterData, this));
+                data.put(file.getName(), new Cluster<>(file.getName(), tempClusterData, this));
                 scanner.close();
             }
         } catch (FileNotFoundException e) {
@@ -60,12 +62,12 @@ public class FastRepository<Record> extends Repository<Record> {
      * @return Cluster, which can contains current id, or null, if such cluster not contains in data storage
      */
     @Override
-    protected synchronized Cluster<Record> findCurrentClusterFromId(final String id) {
+    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id) {
         Map.Entry<String, Cluster<Record>> entry = data.floorEntry(id);
         if (Objects.isNull(entry)) {
-            return null;
+            return Optional.empty();
         } else {
-            return entry.getValue();
+            return Optional.of(entry.getValue());
         }
     }
 
@@ -77,7 +79,7 @@ public class FastRepository<Record> extends Repository<Record> {
      */
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record) {
-        data.put(id, new Cluster<>(id, record, this));
+        data.put(id, new Cluster<>(id, id, record, this));
     }
 
     /**
@@ -90,7 +92,27 @@ public class FastRepository<Record> extends Repository<Record> {
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record,
                                                        final Transaction transaction) {
-        data.put(id, new Cluster<>(id, record, this, transaction));
+        data.put(id, new Cluster<>(id, id, record, this, transaction));
+    }
+
+    /**
+     * Add new record if record with current id not exist in data storage.
+     * Update record if current id exist in data storage. Changes execute in current transaction.
+     *
+     * @param record      Record for save
+     * @param transaction Transaction, in which execute save
+     * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
+     * else return inputted record
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public synchronized Record save(Record record, Transaction transaction) {
+        checkForBlocking();
+        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
+        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
+                () -> createClusterForRecord(id, record, transaction));
+
+        return record;
     }
 
     /**

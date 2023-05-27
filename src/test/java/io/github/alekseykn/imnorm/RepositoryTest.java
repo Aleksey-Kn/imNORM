@@ -306,8 +306,12 @@ abstract class RepositoryTest {
 
     @Test
     void findAllWithConditionAndPaginationWithManyClusters() {
-        repository.saveAll(Stream.iterate(-2, it -> it - 1).limit(2056).map(Dto::new).collect(Collectors.toSet()));
-        repository.saveAll(Stream.iterate(1, it -> it + 1).limit(9).map(Dto::new).collect(Collectors.toSet()));
+        repository.saveAll(Stream.iterate(-2, it -> it - 1)
+                .limit(2056).map(Dto::new)
+                .collect(Collectors.toSet()));
+        repository.saveAll(Stream.iterate(1, it -> it + 1)
+                .limit(9).map(Dto::new)
+                .collect(Collectors.toSet()));
 
         assertThat(repository
                 .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 4, 3))
