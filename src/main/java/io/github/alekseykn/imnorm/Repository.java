@@ -3,6 +3,7 @@ package io.github.alekseykn.imnorm;
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.annotations.Id;
 import io.github.alekseykn.imnorm.exceptions.*;
+import io.github.alekseykn.imnorm.utils.FieldUtil;
 import io.github.alekseykn.imnorm.where.Condition;
 
 import java.io.*;
@@ -78,15 +79,9 @@ public abstract class Repository<Record> {
                 throw new CreateDataStorageException(directory);
         }
 
-        Field[] fields = Arrays.stream(type.getDeclaredFields())
-                .filter(field -> Objects.nonNull(field.getAnnotation(Id.class)))
-                .toArray(Field[]::new);
-        if (fields.length != 1)
-            throw new CountIdException(type);
-        recordId = fields[0];
-        recordId.setAccessible(true);
+        recordId = FieldUtil.getIdField(type);
         needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
-        sizeOfEntity = type.getDeclaredFields().length * 50;
+        sizeOfEntity = FieldUtil.countFields(type) * 50;
 
         if (needGenerateId) {
             try (DataInputStream fileInputStream = new DataInputStream(

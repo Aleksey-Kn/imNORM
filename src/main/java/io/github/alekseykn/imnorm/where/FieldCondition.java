@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm.where;
 
 import io.github.alekseykn.imnorm.exceptions.IllegalFieldNameException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
+import io.github.alekseykn.imnorm.utils.FieldUtil;
 
 import java.lang.reflect.Field;
 import java.util.Comparator;
@@ -92,11 +93,8 @@ public final class FieldCondition<Fld, Entity> implements Condition<Entity> {
     @Override
     public boolean fitsCondition(final Entity record) {
         try {
-            Field field = record.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return condition.test((Fld) field.get(record));
-        } catch (NoSuchFieldException e) {
-            throw new IllegalFieldNameException(fieldName, record.getClass());
+            return condition
+                    .test((Fld) FieldUtil.getFieldFromName(record.getClass(), fieldName).get(record));
         } catch (IllegalAccessException e) {
             throw new InternalImnormException(e);
         }
