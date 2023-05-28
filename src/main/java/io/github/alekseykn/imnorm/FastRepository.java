@@ -4,7 +4,9 @@ import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import io.github.alekseykn.imnorm.where.Condition;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -45,7 +47,7 @@ public class FastRepository<Record> extends Repository<Record> {
                     index = now.indexOf(':');
                     tempClusterData.put(now.substring(0, index), gson.fromJson(now.substring(index + 1), type));
                 }
-                data.put(file.getName(), new Cluster<>(tempClusterData, this));
+                data.put(file.getName(), new Cluster<>(file.getName(), tempClusterData, this));
                 scanner.close();
             }
         } catch (FileNotFoundException e) {
@@ -60,12 +62,12 @@ public class FastRepository<Record> extends Repository<Record> {
      * @return Cluster, which can contains current id, or null, if such cluster not contains in data storage
      */
     @Override
-    protected synchronized Cluster<Record> findCurrentClusterFromId(final String id) {
+    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id) {
         Map.Entry<String, Cluster<Record>> entry = data.floorEntry(id);
         if (Objects.isNull(entry)) {
-            return null;
+            return Optional.empty();
         } else {
-            return entry.getValue();
+            return Optional.of(entry.getValue());
         }
     }
 
@@ -77,7 +79,7 @@ public class FastRepository<Record> extends Repository<Record> {
      */
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record) {
-        data.put(id, new Cluster<>(id, record, this));
+        data.put(id, new Cluster<>(id, id, record, this));
     }
 
     /**
@@ -90,7 +92,27 @@ public class FastRepository<Record> extends Repository<Record> {
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record,
                                                        final Transaction transaction) {
-        data.put(id, new Cluster<>(id, record, this, transaction));
+        data.put(id, new Cluster<>(id, id, record, this, transaction));
+    }
+
+    /**
+     * Add new record if record with current id not exist in data storage.
+     * Update record if current id exist in data storage. Changes execute in current transaction.
+     *
+     * @param record      Record for save
+     * @param transaction Transaction, in which execute save
+     * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
+     * else return inputted record
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    @Override
+    public synchronized Record save(final Record record, final Transaction transaction) {
+        checkForBlocking();
+        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
+        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
+                () -> createClusterForRecord(id, record, transaction));
+
+        return record;
     }
 
     /**
@@ -99,7 +121,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @param records Records, for which needed to create new cluster
      */
     @Override
-    protected Cluster<Record> createClusterForRecords(List<Record> records) {
+    protected synchronized Cluster<Record> createClusterForRecords(final List<Record> records) {
         Cluster<Record> cluster = super.createClusterForRecords(records);
         data.put(cluster.getFirstKey(), cluster);
         splitClusterIfNeed(cluster);
@@ -113,7 +135,8 @@ public class FastRepository<Record> extends Repository<Record> {
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
+    protected synchronized Cluster<Record> createClusterForRecords(final List<Record> records,
+                                                                   final Transaction transaction) {
         Cluster<Record> cluster = super.createClusterForRecords(records, transaction);
         data.put(cluster.getFirstKey(), cluster);
         splitClusterIfNeed(cluster);
@@ -127,7 +150,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll() {
+    public Set<Record> findAll() {
         return data.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream())
                 .collect(Collectors.toSet());
@@ -141,7 +164,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(final Transaction transaction) {
+    public Set<Record> findAll(final Transaction transaction) {
         return data.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
@@ -242,7 +265,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(final Condition<Record> condition, final Transaction transaction) {
+    public Set<Record> findAll(final Condition<Record> condition, final Transaction transaction) {
         return data.values().parallelStream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .filter(condition::fitsCondition)
@@ -322,7 +345,7 @@ public class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized void deleteClusterIfNeed(Cluster<Record> cluster) {
+    protected synchronized void deleteClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.isEmpty()) {
             try {
                 Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
@@ -333,7 +356,7 @@ public class FastRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized void splitClusterIfNeed(Cluster<Record> cluster) {
+    protected synchronized void splitClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
             data.put(newCluster.getFirstKey(), newCluster);

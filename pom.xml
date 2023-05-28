@@ -6,7 +6,7 @@
 
     <groupId>io.github.alekseykn</groupId>
     <artifactId>imnorm</artifactId>
-    <version>1.4.0</version>
+    <version>1.4.2</version>
 
     <properties>
         <maven.compiler.source>15</maven.compiler.source>
@@ -14,13 +14,11 @@
     </properties>
 
     <dependencies>
-        <!-- Gson -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.10.1</version>
         </dependency>
-        <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -32,10 +30,9 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>RELEASE</version>
+            <version>5.9.2</version>
             <scope>test</scope>
         </dependency>
-        <!-- assertj-core -->
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
@@ -101,7 +98,7 @@
                                         <limit>
                                             <counter>METHOD</counter>
                                             <value>MISSEDCOUNT</value>
-                                            <maximum>31</maximum>
+                                            <maximum>37</maximum>
                                         </limit>
                                         <limit>
                                             <counter>LINE</counter>

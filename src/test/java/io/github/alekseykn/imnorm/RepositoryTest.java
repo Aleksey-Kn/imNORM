@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 import support.dto.DtoWithGenerateId;
@@ -272,10 +273,12 @@ abstract class RepositoryTest {
         assertThat(repository.findAll(record -> record.equals(new Dto(-1)))).extracting(Dto::getId).containsOnly(-1);
     }
     
-    @Test
+    @RepeatedTest(1000)
     void findAllWithLambdaConditionWithTransaction() {
         Transaction transaction = Transaction.waitingTransaction();
-        assertThat(repository.findAll(record -> record.equals(new Dto(-1)), transaction)).extracting(Dto::getId).containsOnly(-1);
+        assertThat(repository.findAll(record -> record.equals(new Dto(-1)), transaction))
+                .extracting(Dto::getId)
+                .containsOnly(-1);
         transaction.commit();
     }
 
@@ -306,8 +309,12 @@ abstract class RepositoryTest {
 
     @Test
     void findAllWithConditionAndPaginationWithManyClusters() {
-        repository.saveAll(Stream.iterate(-2, it -> it - 1).limit(2056).map(Dto::new).collect(Collectors.toSet()));
-        repository.saveAll(Stream.iterate(1, it -> it + 1).limit(9).map(Dto::new).collect(Collectors.toSet()));
+        repository.saveAll(Stream.iterate(-2, it -> it - 1)
+                .limit(2056).map(Dto::new)
+                .collect(Collectors.toSet()));
+        repository.saveAll(Stream.iterate(1, it -> it + 1)
+                .limit(9).map(Dto::new)
+                .collect(Collectors.toSet()));
 
         assertThat(repository
                 .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 4, 3))

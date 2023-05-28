@@ -4,12 +4,13 @@ import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.extern.java.Log;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * Block for keeping records. All clusters correspond to some files from the file data storage.
@@ -20,7 +21,6 @@ import java.util.*;
  * @param <Record> Type of entity for this cluster
  * @author Aleksey-Kn
  */
-@Log
 public final class Cluster<Record> {
     /**
      * Repository, to which belongs this cluster
@@ -60,23 +60,24 @@ public final class Cluster<Record> {
      * @param map   Record collection
      * @param owner Repository, to which belongs this cluster
      */
-    Cluster(final TreeMap<String, Record> map, final Repository<Record> owner) {
+    Cluster(final String firstKey, final TreeMap<String, Record> map, final Repository<Record> owner) {
         data = map;
         repository = owner;
-        firstKey = data.firstKey();
+        this.firstKey = firstKey;
     }
 
     /**
      * Create cluster with current records collection in current transaction
      *
-     * @param map   Record collection
-     * @param owner Repository, to which belongs this cluster
+     * @param map         Record collection
+     * @param owner       Repository, to which belongs this cluster
      * @param transaction Transaction, in which create cluster
      */
-    Cluster(final TreeMap<String, Record> map, final Repository<Record> owner, final Transaction transaction) {
+    Cluster(final String firstKey, final TreeMap<String, Record> map, final Repository<Record> owner,
+            final Transaction transaction) {
         copyDataForTransactions = map;
         repository = owner;
-        firstKey = data.firstKey();
+        this.firstKey = firstKey;
 
         transaction.captureLock(this);
     }
@@ -88,10 +89,10 @@ public final class Cluster<Record> {
      * @param record Current record for save in cluster
      * @param owner  Repository, to which belongs this cluster
      */
-    Cluster(final String id, Record record, final Repository<Record> owner) {
+    Cluster(final String firstKey, final String id, Record record, final Repository<Record> owner) {
         data.put(id, record);
         repository = owner;
-        firstKey = id;
+        this.firstKey = firstKey;
     }
 
     /**
@@ -102,11 +103,11 @@ public final class Cluster<Record> {
      * @param owner       Repository, to which belongs this cluster
      * @param transaction The transaction to which this record will belong
      */
-    Cluster(final String id, final Record record, final Repository<Record> owner, final Transaction transaction) {
+    Cluster(final String firstKey, final String id, final Record record, final Repository<Record> owner, final Transaction transaction) {
         copyDataForTransactions = new TreeMap<>();
         copyDataForTransactions.put(id, record);
         repository = owner;
-        firstKey = id;
+        this.firstKey = firstKey;
 
         transaction.captureLock(this);
     }
@@ -224,7 +225,7 @@ public final class Cluster<Record> {
      * @return Quantity record in this cluster in current transaction
      */
     int sizeWithTransaction() {
-        return Objects.isNull(copyDataForTransactions)? size(): copyDataForTransactions.size();
+        return Objects.isNull(copyDataForTransactions) ? size() : copyDataForTransactions.size();
     }
 
     /**
@@ -233,7 +234,7 @@ public final class Cluster<Record> {
     String getFirstKey() {
         return firstKey;
     }
-    
+
     /**
      * Checking the contents of a record records with current string identifier
      *
@@ -257,19 +258,18 @@ public final class Cluster<Record> {
      * @return New cluster, in which a part of the records of the current cluster was taken out
      */
     Cluster<Record> split() {
-        TreeMap<String, Record> newClusterData = new TreeMap<>();
-        int counter = 0;
-        final int median = data.size() / 2;
-        Iterator<Map.Entry<String, Record>> it = data.entrySet().iterator();
-        Map.Entry<String, Record> entry;
-        while (it.hasNext()) {
-            entry = it.next();
-            if (counter++ > median) {
-                newClusterData.put(entry.getKey(), entry.getValue());
-                it.remove();
-            }
-        }
-        return new Cluster<>(newClusterData, repository);
+        Spliterator<Map.Entry<String, Record>> spliterator = data.entrySet().spliterator();
+        Spliterator<Map.Entry<String, Record>> currentClusterData = spliterator.trySplit();
+
+        data = StreamSupport.stream(currentClusterData, false)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
+                        TreeMap::new));
+
+        TreeMap<String, Record> newClusterData = StreamSupport.stream(spliterator, false)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
+                        TreeMap::new));
+
+        return new Cluster<>(newClusterData.firstKey(), newClusterData, repository);
     }
 
     /**
@@ -317,25 +317,27 @@ public final class Cluster<Record> {
      * @param transaction A transaction that checks or tries to get a lock
      */
     private void lock(final Transaction transaction) {
-        if (!transaction.lockOwner(this)) {
-            if (Objects.nonNull(copyDataForTransactions)) {
-                try {
-                    waitingTransactionCount++;
-                    long waitLimit = System.currentTimeMillis() + transaction.getWaitTime();
-                    while (System.currentTimeMillis() < waitLimit && Objects.nonNull(copyDataForTransactions)) {
-                        repository.wait(50);
-                    }
-                    waitingTransactionCount--;
-                } catch (InterruptedException e) {
-                    throw new InternalImnormException(e);
-                }
+        synchronized (repository) {
+            if (!transaction.lockOwner(this)) {
                 if (Objects.nonNull(copyDataForTransactions)) {
-                    transaction.rollback();
-                    throw new DeadLockException(firstKey);
+                    try {
+                        waitingTransactionCount++;
+                        long waitLimit = System.currentTimeMillis() + transaction.getWaitTime();
+                        while (System.currentTimeMillis() < waitLimit && Objects.nonNull(copyDataForTransactions)) {
+                            repository.wait(50);
+                        }
+                        waitingTransactionCount--;
+                    } catch (InterruptedException e) {
+                        throw new InternalImnormException(e);
+                    }
+                    if (Objects.nonNull(copyDataForTransactions)) {
+                        transaction.rollback();
+                        throw new DeadLockException(firstKey);
+                    }
                 }
+                copyDataForTransactions = new TreeMap<>(data);
+                transaction.captureLock(this);
             }
-            copyDataForTransactions = new TreeMap<>(data);
-            transaction.captureLock(this);
         }
     }
 
@@ -343,10 +345,10 @@ public final class Cluster<Record> {
      * Saving changes made in a transaction and subsequent checking of the cluster for emptiness or overcrowding
      */
     void commit() {
-        data = copyDataForTransactions;
-        copyDataForTransactions = null;
-        redacted = true;
         synchronized (repository) {
+            data = copyDataForTransactions;
+            copyDataForTransactions = null;
+            redacted = true;
             if (waitingTransactionCount == 0) {
                 repository.splitClusterIfNeed(this);
                 repository.deleteClusterIfNeed(this);
@@ -359,8 +361,8 @@ public final class Cluster<Record> {
      * Canceling changes made in a transaction
      */
     void rollback() {
-        copyDataForTransactions = null;
         synchronized (repository) {
+            copyDataForTransactions = null;
             repository.notifyAll();
         }
     }
