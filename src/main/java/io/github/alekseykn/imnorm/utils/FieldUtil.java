@@ -3,6 +3,7 @@ package io.github.alekseykn.imnorm.utils;
 import io.github.alekseykn.imnorm.annotations.Id;
 import io.github.alekseykn.imnorm.exceptions.CountIdException;
 import io.github.alekseykn.imnorm.exceptions.IllegalFieldNameException;
+import lombok.experimental.UtilityClass;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -13,6 +14,7 @@ import java.util.Objects;
  *
  * @author Aleksey-Kn
  */
+@UtilityClass
 public class FieldUtil {
     /**
      * Find id field from specified entity

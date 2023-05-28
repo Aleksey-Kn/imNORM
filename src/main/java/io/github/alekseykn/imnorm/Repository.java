@@ -227,7 +227,7 @@ public abstract class Repository<Record> {
      *
      * @param records Records, for which needed to create new cluster
      */
-    protected Cluster<Record> createClusterForRecords(List<Record> records) {
+    protected Cluster<Record> createClusterForRecords(final List<Record> records) {
         TreeMap<String, Record> data = records.stream()
                 .collect(Collectors.toMap(this::getIdFromRecord, record -> record, (first, second) -> first,
                         TreeMap::new));
@@ -240,7 +240,7 @@ public abstract class Repository<Record> {
      * @param records     Records, for which needed to create new cluster
      * @param transaction Transaction, in which execute create
      */
-    protected Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
+    protected Cluster<Record> createClusterForRecords(final List<Record> records, final Transaction transaction) {
         TreeMap<String, Record> data = records.stream()
                 .collect(Collectors.toMap(this::getIdFromRecord, record -> record, (first, second) -> first,
                         TreeMap::new));
@@ -308,7 +308,7 @@ public abstract class Repository<Record> {
      * @return Incoming collection with changed ids, where necessary
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Set<Record> saveAll(final Collection<Record> records, Transaction transaction) {
+    public synchronized Set<Record> saveAll(final Collection<Record> records, final Transaction transaction) {
         if (records.isEmpty())
             return null;
         List<Record> sortedRecords = createRecordsSortedList(records);
@@ -356,7 +356,7 @@ public abstract class Repository<Record> {
      * @return Found record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record findById(Object id, Transaction transaction) {
+    public Record findById(final Object id, final Transaction transaction) {
         String realId = getStringHashFromId(id);
         return findCurrentClusterFromId(realId).orElseThrow().get(realId, transaction);
     }

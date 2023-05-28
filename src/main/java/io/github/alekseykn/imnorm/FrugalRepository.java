@@ -126,7 +126,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Record save(Record record, Transaction transaction) {
+    public synchronized Record save(final Record record, final Transaction transaction) {
         checkForBlocking();
         String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
         findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
@@ -141,7 +141,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @param records Records, for which needed to create new cluster
      */
     @Override
-    protected synchronized Cluster<Record> createClusterForRecords(List<Record> records) {
+    protected synchronized Cluster<Record> createClusterForRecords(final List<Record> records) {
         Cluster<Record> cluster = super.createClusterForRecords(records);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
@@ -158,7 +158,8 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected synchronized Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
+    protected synchronized Cluster<Record> createClusterForRecords(final List<Record> records,
+                                                                   final Transaction transaction) {
         Cluster<Record> cluster = super.createClusterForRecords(records, transaction);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
@@ -339,7 +340,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Set<Record> findAll(Condition<Record> condition) {
+    public Set<Record> findAll(final Condition<Record> condition) {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream().filter(condition::fitsCondition))
                 .collect(Collectors.toSet());
@@ -356,7 +357,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Set<Record> findAll(Condition<Record> condition, Transaction transaction) {
+    public Set<Record> findAll(final Condition<Record> condition, final Transaction transaction) {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream().filter(condition::fitsCondition))
                 .collect(Collectors.toSet());
@@ -374,7 +375,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount) {
+    public Set<Record> findAll(final Condition<Record> condition, int startIndex, int rowCount) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> records;
 
@@ -416,7 +417,8 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Set<Record> findAll(Condition<Record> condition, int startIndex, int rowCount, Transaction transaction) {
+    public Set<Record> findAll(final Condition<Record> condition, int startIndex, int rowCount,
+                               final Transaction transaction) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> records;
 
@@ -505,7 +507,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized void splitClusterIfNeed(Cluster<Record> cluster) {
+    protected synchronized void splitClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
             String firstKeyNewCluster = newCluster.getFirstKey();
@@ -515,7 +517,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     }
 
     @Override
-    protected synchronized void deleteClusterIfNeed(Cluster<Record> cluster) {
+    protected synchronized void deleteClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.isEmpty()) {
             try {
                 Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
