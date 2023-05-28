@@ -121,7 +121,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @param records Records, for which needed to create new cluster
      */
     @Override
-    protected Cluster<Record> createClusterForRecords(List<Record> records) {
+    protected synchronized Cluster<Record> createClusterForRecords(List<Record> records) {
         Cluster<Record> cluster = super.createClusterForRecords(records);
         data.put(cluster.getFirstKey(), cluster);
         splitClusterIfNeed(cluster);
@@ -135,7 +135,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
+    protected synchronized Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
         Cluster<Record> cluster = super.createClusterForRecords(records, transaction);
         data.put(cluster.getFirstKey(), cluster);
         splitClusterIfNeed(cluster);
@@ -149,7 +149,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll() {
+    public Set<Record> findAll() {
         return data.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream())
                 .collect(Collectors.toSet());
@@ -163,7 +163,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(final Transaction transaction) {
+    public Set<Record> findAll(final Transaction transaction) {
         return data.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
@@ -264,7 +264,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(final Condition<Record> condition, final Transaction transaction) {
+    public Set<Record> findAll(final Condition<Record> condition, final Transaction transaction) {
         return data.values().parallelStream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .filter(condition::fitsCondition)

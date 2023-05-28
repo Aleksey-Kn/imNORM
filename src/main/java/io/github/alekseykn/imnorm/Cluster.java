@@ -80,11 +80,6 @@ public final class Cluster<Record> {
         this.firstKey = firstKey;
 
         transaction.captureLock(this);
-
-        System.out.println("First key: " + firstKey + ". Second key: " + map.lastKey());
-        System.out.println("Create cluster " + firstKey + " from " + Thread.currentThread().getName());
-        Arrays.stream(Thread.currentThread().getStackTrace()).forEach(System.out::println);
-        System.out.println();
     }
 
     /**
@@ -115,8 +110,6 @@ public final class Cluster<Record> {
         this.firstKey = firstKey;
 
         transaction.captureLock(this);
-
-        System.out.println("Create cluster " + firstKey + " from " + Thread.currentThread().getName());
     }
 
     /**
@@ -143,8 +136,6 @@ public final class Cluster<Record> {
     void set(final String key, final Record record, final Transaction transaction) {
         lock(transaction);
         copyDataForTransactions.put(key, record);
-
-        System.out.println("Add key" + key + " from " + Thread.currentThread().getName() + " to cluster " + firstKey);
     }
 
     /**
@@ -267,16 +258,17 @@ public final class Cluster<Record> {
      * @return New cluster, in which a part of the records of the current cluster was taken out
      */
     Cluster<Record> split() {
-        Spliterator<Map.Entry<String, Record>> currentData = data.entrySet().spliterator();
-        Spliterator<Map.Entry<String, Record>> otherData = currentData.trySplit();
-        System.out.println("Was split!!!!!!!!");
-        data = StreamSupport.stream(currentData, false)
+        Spliterator<Map.Entry<String, Record>> spliterator = data.entrySet().spliterator();
+        Spliterator<Map.Entry<String, Record>> currentClusterData = spliterator.trySplit();
+
+        data = StreamSupport.stream(currentClusterData, false)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
                         TreeMap::new));
 
-        TreeMap<String, Record> newClusterData = StreamSupport.stream(otherData, false)
+        TreeMap<String, Record> newClusterData = StreamSupport.stream(spliterator, false)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
                         TreeMap::new));
+
         return new Cluster<>(newClusterData.firstKey(), newClusterData, repository);
     }
 
@@ -284,8 +276,6 @@ public final class Cluster<Record> {
      * Save to file data storage records from this cluster
      */
     void flush() {
-        System.out.println("Was flush!! From " + Thread.currentThread().getName() + " cluster " + firstKey);
-
         if (redacted) {
             try (PrintWriter printWriter = new PrintWriter(new File(repository.directory.getAbsolutePath(), firstKey))) {
                 data.forEach((key, record) ->
@@ -356,7 +346,6 @@ public final class Cluster<Record> {
      */
     void commit() {
         synchronized (repository) {
-            System.out.println("Commit");
             data = copyDataForTransactions;
             copyDataForTransactions = null;
             redacted = true;
@@ -373,7 +362,6 @@ public final class Cluster<Record> {
      */
     void rollback() {
         synchronized (repository) {
-            System.out.println("Rollback");
             copyDataForTransactions = null;
             repository.notifyAll();
         }

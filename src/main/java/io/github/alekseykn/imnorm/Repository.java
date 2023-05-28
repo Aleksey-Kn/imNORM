@@ -220,7 +220,7 @@ public abstract class Repository<Record> {
      * else return inputted record
      * @throws DeadLockException Current record lock from other transaction
      */
-     public abstract Record save(final Record record, final Transaction transaction);
+    public abstract Record save(final Record record, final Transaction transaction);
 
     /**
      * Add new cluster and insert current collection in it
@@ -246,7 +246,7 @@ public abstract class Repository<Record> {
                         TreeMap::new));
         return new Cluster<>(data.firstKey(), data, this, transaction);
     }
-    
+
     /**
      * Make sorted by id list and change record id, where necessary
      *
@@ -277,7 +277,7 @@ public abstract class Repository<Record> {
 
         Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getIdFromRecord(sortedRecords.get(0)));
         if (cluster.isEmpty()) {
-            cluster = Optional.of(createClusterForRecords(sortedRecords));
+            createClusterForRecords(sortedRecords);
         } else {
             String id;
             for (Record record : records) {
@@ -293,8 +293,8 @@ public abstract class Repository<Record> {
                 }
                 cluster.get().set(id, record);
             }
+            splitClusterIfNeed(cluster.get());
         }
-        splitClusterIfNeed(cluster.get());
 
         return new HashSet<>(sortedRecords);
     }
@@ -314,8 +314,8 @@ public abstract class Repository<Record> {
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getIdFromRecord(sortedRecords.get(0)));
-        if (Objects.isNull(cluster)) {
-            cluster = Optional.of(createClusterForRecords(sortedRecords));
+        if (cluster.isEmpty()) {
+            createClusterForRecords(sortedRecords);
         } else {
             String id;
             for (Record record : records) {
@@ -330,8 +330,8 @@ public abstract class Repository<Record> {
                 }
                 cluster.get().set(id, record, transaction);
             }
+            splitClusterIfNeed(cluster.get());
         }
-        splitClusterIfNeed(cluster.get());
 
         return new HashSet<>(sortedRecords);
     }
@@ -343,7 +343,7 @@ public abstract class Repository<Record> {
      * @return Found record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Record findById(final Object id) {
+    public Record findById(final Object id) {
         String realId = getStringHashFromId(id);
         return findCurrentClusterFromId(realId).orElseThrow().get(realId);
     }
@@ -356,7 +356,7 @@ public abstract class Repository<Record> {
      * @return Found record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Record findById(Object id, Transaction transaction) {
+    public Record findById(Object id, Transaction transaction) {
         String realId = getStringHashFromId(id);
         return findCurrentClusterFromId(realId).orElseThrow().get(realId, transaction);
     }
@@ -488,7 +488,7 @@ public abstract class Repository<Record> {
      * @return Record, which was deleted, or null, where specified record not exist
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record delete(final Record record) {
+    public synchronized Record delete(final Record record) {
         return deleteById(getIdFromRecord(record));
     }
 
@@ -500,7 +500,7 @@ public abstract class Repository<Record> {
      * where specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record delete(final Record record, final Transaction transaction) {
+    public synchronized Record delete(final Record record, final Transaction transaction) {
         return deleteById(getIdFromRecord(record), transaction);
     }
 
@@ -520,7 +520,7 @@ public abstract class Repository<Record> {
     /**
      * Save data from current repository to file system
      */
-    public void flush() {
+    public synchronized void flush() {
         if (needGenerateId) {
             try (DataOutputStream outputStream = new DataOutputStream(
                     new FileOutputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
@@ -564,7 +564,7 @@ public abstract class Repository<Record> {
         if (locked)
             throw new RepositoryWasLockedException();
     }
-    
+
     /**
      * Checks the existence of a record with the specified id
      *

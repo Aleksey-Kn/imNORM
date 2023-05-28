@@ -2,6 +2,7 @@ package io.github.alekseykn.imnorm;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 import support.dto.DtoWithGenerateId;
@@ -272,10 +273,12 @@ abstract class RepositoryTest {
         assertThat(repository.findAll(record -> record.equals(new Dto(-1)))).extracting(Dto::getId).containsOnly(-1);
     }
     
-    @Test
+    @RepeatedTest(1000)
     void findAllWithLambdaConditionWithTransaction() {
         Transaction transaction = Transaction.waitingTransaction();
-        assertThat(repository.findAll(record -> record.equals(new Dto(-1)), transaction)).extracting(Dto::getId).containsOnly(-1);
+        assertThat(repository.findAll(record -> record.equals(new Dto(-1)), transaction))
+                .extracting(Dto::getId)
+                .containsOnly(-1);
         transaction.commit();
     }
 

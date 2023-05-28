@@ -168,12 +168,13 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @param records Records, for which needed to create new cluster
      */
     @Override
-    protected Cluster<Record> createClusterForRecords(List<Record> records) {
+    protected synchronized Cluster<Record> createClusterForRecords(List<Record> records) {
         Cluster<Record> cluster = super.createClusterForRecords(records);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
         splitClusterIfNeed(cluster);
         checkAndDropIfTooMuchOpenClusters();
+
         return cluster;
     }
 
@@ -184,7 +185,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
+    protected synchronized Cluster<Record> createClusterForRecords(List<Record> records, Transaction transaction) {
         Cluster<Record> cluster = super.createClusterForRecords(records, transaction);
         openClusters.put(cluster.getFirstKey(), cluster);
         clusterNames.add(cluster.getFirstKey());
@@ -219,7 +220,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll() {
+    public Set<Record> findAll() {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll().stream())
                 .collect(Collectors.toSet());
@@ -235,7 +236,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(final Transaction transaction) {
+    public Set<Record> findAll(final Transaction transaction) {
         Set<Record> result = openClusters.values().stream()
                 .flatMap(recordCluster -> recordCluster.findAll(transaction).stream())
                 .collect(Collectors.toSet());
@@ -269,7 +270,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(int startIndex, int rowCount) {
+    public Set<Record> findAll(int startIndex, int rowCount) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
@@ -318,7 +319,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public synchronized Set<Record> findAll(int startIndex, int rowCount, final Transaction transaction) {
+    public Set<Record> findAll(int startIndex, int rowCount, final Transaction transaction) {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
@@ -516,7 +517,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * Drop from RAM after save to file system the most previously opened cluster, which not contains open transaction,
      * if quantity of clusters more max value
      */
-    private void checkAndDropIfTooMuchOpenClusters() {
+    private synchronized void checkAndDropIfTooMuchOpenClusters() {
         if (openClusters.size() > maxClustersQuantity) {
             Iterator<Map.Entry<String, Cluster<Record>>> it = openClusters.entrySet().iterator();
             while (it.hasNext()) {
