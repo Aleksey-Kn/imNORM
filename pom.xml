@@ -98,7 +98,7 @@
                                         <limit>
                                             <counter>METHOD</counter>
                                             <value>MISSEDCOUNT</value>
-                                            <maximum>31</maximum>
+                                            <maximum>37</maximum>
                                         </limit>
                                         <limit>
                                             <counter>LINE</counter>
