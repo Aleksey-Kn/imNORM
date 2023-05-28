@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -55,11 +54,9 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * Find cluster, which can contains current id. If such cluster not exists in RAM, upload it from file data storage
      *
      * @param id             Record id, for which execute search
-     * @param clusterCreator Algorithm create of cluster
      * @return Cluster, which can contains current id, or null, if such cluster not contains in data storage
      */
-    private synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id,
-                                                                            final BiFunction<String, TreeMap<String, Record>, Cluster<Record>> clusterCreator) {
+    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id){
         String clusterId = clusterNames.floor(id);
         if (openClusters.containsKey(clusterId)) {
             return Optional.of(openClusters.get(clusterId));
@@ -79,7 +76,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
                         Files.delete(clusterPath);
                         return Optional.empty();
                     } else {
-                        openClusters.put(clusterId, clusterCreator.apply(clusterId, tempClusterData));
+                        openClusters.put(clusterId, new Cluster<>(clusterId, tempClusterData, this));
                         checkAndDropIfTooMuchOpenClusters();
                         return Optional.of(openClusters.get(clusterId));
                     }
@@ -88,30 +85,6 @@ public class FrugalRepository<Record> extends Repository<Record> {
                 }
             }
         }
-    }
-
-    /**
-     * Find cluster, which can contain record with current id
-     *
-     * @param id Record id, for which execute search
-     * @return Cluster, which can contain current record
-     */
-    @Override
-    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id) {
-        return findCurrentClusterFromId(id,
-                (firstKey, tempClusterData) -> new Cluster<>(firstKey, tempClusterData, this));
-    }
-
-    /**
-     * Find cluster, which can contain record with current id, in transaction context
-     *
-     * @param id          Record id, for which execute search
-     * @param transaction Current transaction
-     * @return Cluster, which can contain current record
-     */
-    private synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id, final Transaction transaction) {
-        return findCurrentClusterFromId(id,
-                (firstKey, tempClusterData) -> new Cluster<>(firstKey, tempClusterData, this, transaction));
     }
 
     /**
@@ -156,7 +129,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     public synchronized Record save(Record record, Transaction transaction) {
         checkForBlocking();
         String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
-        findCurrentClusterFromId(id, transaction).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
+        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
                 () -> createClusterForRecord(id, record, transaction));
 
         return record;
@@ -493,7 +466,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     public synchronized void flush() {
         super.flush();
         openClusters.values().forEach(Cluster::flush);
-        openClusters.entrySet().removeIf(stringClusterEntry -> stringClusterEntry.getValue().hasNotOpenTransactions());
+        openClusters.entrySet().removeIf(cluster -> cluster.getValue().hasNotOpenTransactions());
     }
 
     /**

@@ -2,14 +2,12 @@ package io.github.alekseykn.imnorm;
 
 import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
-import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import support.dto.Dto;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -238,7 +236,7 @@ class TransactionTest {
                 .containsAll(Stream.iterate(10000, integer -> integer + 1).limit(1600).collect(Collectors.toSet()));
     }
 
-    @Test
+    @RepeatedTest(500)
     @SneakyThrows
     void saveShouldRollbackWhereThrowExceptionFromRetryingWaitTransactions() {
         Set<Integer> first = Stream.iterate(0, integer -> integer + 1)
@@ -251,9 +249,10 @@ class TransactionTest {
         Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction -> {
             first.forEach(id -> repository.save(new Dto(id), transaction));
             throw new RuntimeException("Expected exception");
-        }));
+        }), "First");
         Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction ->
-                second.forEach(id -> repository.save(new Dto(id), transaction))));
+                        second.forEach(id -> repository.save(new Dto(id), transaction)))
+                .ifPresent(Exception::printStackTrace), "Second");
         thread1.start();
         thread2.start();
         thread1.join();
