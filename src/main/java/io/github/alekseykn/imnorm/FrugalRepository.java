@@ -290,7 +290,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
                 } else {
                     afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll().stream()
-                                    : readLines.stream()
+                                    : Objects.requireNonNull(readLines).stream()
                                     .map(s -> s.substring(s.indexOf(':') + 1))
                                     .map(s -> gson.fromJson(s, type)),
                             startIndex,
@@ -339,7 +339,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
                 } else {
                     afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
                                     ? openClusters.get(clusterName).findAll(transaction).stream()
-                                    : readLines.stream()
+                                    : Objects.requireNonNull(readLines).stream()
                                     .map(s -> s.substring(s.indexOf(':') + 1))
                                     .map(s -> gson.fromJson(s, type)),
                             startIndex,
