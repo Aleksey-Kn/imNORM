@@ -96,7 +96,7 @@ public abstract class Repository<Record> {
     /**
      * Function for get data entity id as string
      */
-    protected String getIdFromRecord(Record record) {
+    protected String getIdFromRecord(final Record record) {
         try {
             return getStringHashFromId(recordId.get(record));
         } catch (IllegalAccessException e) {
@@ -107,12 +107,13 @@ public abstract class Repository<Record> {
     /**
      * Function for get string hash of id
      */
-    protected String getStringHashFromId(Object id) {
+    protected String getStringHashFromId(final Object id) {
         String key = String.valueOf(id);
         if (!(id instanceof Number)) {
             key = key.replaceAll("[\"\\\\|/*:?<>]", "_");
-            if (key.length() > 255)
-                key = key.substring(0, 240) + key.hashCode();
+            if (key.length() > 240)
+                key = key.substring(0, 240);
+            key = key + key.hashCode();
         }
         return key;
     }
@@ -220,7 +221,14 @@ public abstract class Repository<Record> {
      * else return inputted record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public abstract Record save(final Record record, final Transaction transaction);
+    public synchronized Record save(final Record record, final Transaction transaction) {
+        checkForBlocking();
+        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
+        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
+                () -> createClusterForRecord(id, record, transaction));
+
+        return record;
+    }
 
     /**
      * Add new cluster and insert current collection in it
@@ -272,7 +280,7 @@ public abstract class Repository<Record> {
      */
     public synchronized Set<Record> saveAll(final Collection<Record> records) {
         if (records.isEmpty())
-            return null;
+            return Set.of();
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getIdFromRecord(sortedRecords.get(0)));
@@ -310,7 +318,7 @@ public abstract class Repository<Record> {
      */
     public synchronized Set<Record> saveAll(final Collection<Record> records, final Transaction transaction) {
         if (records.isEmpty())
-            return null;
+            return Set.of();
         List<Record> sortedRecords = createRecordsSortedList(records);
 
         Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getIdFromRecord(sortedRecords.get(0)));
@@ -343,9 +351,9 @@ public abstract class Repository<Record> {
      * @return Found record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record findById(final Object id) {
+    public Optional<Record> findById(final Object id) {
         String realId = getStringHashFromId(id);
-        return findCurrentClusterFromId(realId).orElseThrow().get(realId);
+        return Optional.ofNullable(findCurrentClusterFromId(realId).orElseThrow().get(realId));
     }
 
     /**
@@ -356,9 +364,9 @@ public abstract class Repository<Record> {
      * @return Found record
      * @throws DeadLockException Current record lock from other transaction
      */
-    public Record findById(final Object id, final Transaction transaction) {
+    public Optional<Record> findById(final Object id, final Transaction transaction) {
         String realId = getStringHashFromId(id);
-        return findCurrentClusterFromId(realId).orElseThrow().get(realId, transaction);
+        return Optional.ofNullable(findCurrentClusterFromId(realId).orElseThrow().get(realId, transaction));
     }
 
     /**
@@ -448,17 +456,8 @@ public abstract class Repository<Record> {
      * @return Record, which was deleted from repository, or null, if specified record not exist
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Record deleteById(final Object id) {
-        checkForBlocking();
-        String realId = getStringHashFromId(id);
-        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(realId);
-        if (cluster.isEmpty()) {
-            return null;
-        } else {
-            Record record = cluster.get().delete(realId);
-            deleteClusterIfNeed(cluster.get());
-            return record;
-        }
+    public synchronized Optional<Record> deleteById(final Object id) {
+        return innerDelete(getStringHashFromId(id));
     }
 
     /**
@@ -470,15 +469,8 @@ public abstract class Repository<Record> {
      * if specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Record deleteById(final Object id, final Transaction transaction) {
-        checkForBlocking();
-        String realId = getStringHashFromId(id);
-        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(realId);
-        if (cluster.isEmpty()) {
-            return null;
-        } else {
-            return cluster.get().delete(realId, transaction);
-        }
+    public synchronized Optional<Record> deleteById(final Object id, final Transaction transaction) {
+        return innerDelete(getStringHashFromId(id), transaction);
     }
 
     /**
@@ -488,8 +480,8 @@ public abstract class Repository<Record> {
      * @return Record, which was deleted, or null, where specified record not exist
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Record delete(final Record record) {
-        return deleteById(getIdFromRecord(record));
+    public synchronized Optional<Record> delete(final Record record) {
+        return innerDelete(getIdFromRecord(record));
     }
 
     /**
@@ -500,8 +492,47 @@ public abstract class Repository<Record> {
      * where specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    public synchronized Record delete(final Record record, final Transaction transaction) {
-        return deleteById(getIdFromRecord(record), transaction);
+    public synchronized Optional<Record> delete(final Record record, final Transaction transaction) {
+        return innerDelete(getIdFromRecord(record), transaction);
+    }
+
+    /**
+     * Remove record with specified id hash. If current cluster becomes empty it is deleted.
+     *
+     * @param realId          Hash of id of the record being deleted
+     * @return Record, which was deleted from repository in current transaction, or null,
+     * if specified record not exist in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    protected synchronized Optional<Record> innerDelete(final String realId) {
+        checkForBlocking();
+        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(realId);
+        if (cluster.isEmpty()) {
+            return Optional.empty();
+        } else {
+            Record record = cluster.get().delete(realId);
+            deleteClusterIfNeed(cluster.get());
+            return Optional.ofNullable(record);
+        }
+    }
+
+    /**
+     * Remove record with specified id hash in current transaction
+     *
+     * @param realId          Hash of id of the record being deleted
+     * @param transaction Transaction, in which execute delete
+     * @return Record, which was deleted from repository in current transaction, or null,
+     * if specified record not exist in current transaction
+     * @throws DeadLockException Current record lock from other transaction
+     */
+    protected synchronized Optional<Record> innerDelete(final String realId, final Transaction transaction) {
+        checkForBlocking();
+        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(realId);
+        if (cluster.isEmpty()) {
+            return Optional.empty();
+        } else {
+            return Optional.ofNullable(cluster.get().delete(realId, transaction));
+        }
     }
 
     /**

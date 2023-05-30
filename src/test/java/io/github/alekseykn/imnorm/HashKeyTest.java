@@ -23,7 +23,7 @@ public abstract class HashKeyTest {
         repository.save(new StringDto(key));
         repository.flush();
 
-        assertThat(repository.findById(key).getId()).isEqualTo(key);
+        assertThat(repository.findById(key).orElseThrow().getId()).isEqualTo(key);
     }
 
     @Test
@@ -32,7 +32,7 @@ public abstract class HashKeyTest {
         repository.saveAll(List.of(new StringDto(key)));
         repository.flush();
 
-        assertThat(repository.findById(key).getId()).isEqualTo(key);
+        assertThat(repository.findById(key).orElseThrow().getId()).isEqualTo(key);
     }
 
     @Test
@@ -41,7 +41,7 @@ public abstract class HashKeyTest {
         repository.save(new StringDto(key));
         repository.flush();
 
-        assertThat(repository.deleteById(key).getId()).isEqualTo(key);
+        assertThat(repository.deleteById(key).orElseThrow().getId()).isEqualTo(key);
         assertThat(repository.findAll()).isEmpty();
     }
 
@@ -51,7 +51,7 @@ public abstract class HashKeyTest {
         repository.save(new StringDto(key));
         repository.flush();
 
-        assertThat(repository.findById(key).getId()).isEqualTo(key);
+        assertThat(repository.findById(key).orElseThrow().getId()).isEqualTo(key);
     }
 
     @Test
@@ -60,7 +60,7 @@ public abstract class HashKeyTest {
         repository.saveAll(List.of(new StringDto(key)));
         repository.flush();
 
-        assertThat(repository.findById(key).getId()).isEqualTo(key);
+        assertThat(repository.findById(key).orElseThrow().getId()).isEqualTo(key);
     }
 
     @Test
@@ -69,7 +69,7 @@ public abstract class HashKeyTest {
         repository.save(new StringDto(key));
         repository.flush();
 
-        assertThat(repository.deleteById(key).getId()).isEqualTo(key);
+        assertThat(repository.deleteById(key).orElseThrow().getId()).isEqualTo(key);
         assertThat(repository.findAll()).isEmpty();
     }
 }

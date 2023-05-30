@@ -4,6 +4,7 @@ import io.github.alekseykn.imnorm.exceptions.DeadLockException;
 import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -55,8 +56,15 @@ public final class Cluster<Record> {
     private int waitingTransactionCount = 0;
 
     /**
+     * ID of whether this cluster is active
+     */
+    @Setter
+    private boolean dropped = false;
+
+    /**
      * Create cluster with current records collection
      *
+     * @param firstKey Identity of cluster
      * @param map   Record collection
      * @param owner Repository, to which belongs this cluster
      */
@@ -69,6 +77,7 @@ public final class Cluster<Record> {
     /**
      * Create cluster with current records collection in current transaction
      *
+     * @param firstKey Identity of cluster
      * @param map         Record collection
      * @param owner       Repository, to which belongs this cluster
      * @param transaction Transaction, in which create cluster
@@ -89,10 +98,10 @@ public final class Cluster<Record> {
      * @param record Current record for save in cluster
      * @param owner  Repository, to which belongs this cluster
      */
-    Cluster(final String firstKey, final String id, Record record, final Repository<Record> owner) {
+    Cluster(final String id, Record record, final Repository<Record> owner) {
         data.put(id, record);
         repository = owner;
-        this.firstKey = firstKey;
+        this.firstKey = id;
     }
 
     /**
@@ -103,11 +112,11 @@ public final class Cluster<Record> {
      * @param owner       Repository, to which belongs this cluster
      * @param transaction The transaction to which this record will belong
      */
-    Cluster(final String firstKey, final String id, final Record record, final Repository<Record> owner, final Transaction transaction) {
+    Cluster(final String id, final Record record, final Repository<Record> owner, final Transaction transaction) {
         copyDataForTransactions = new TreeMap<>();
         copyDataForTransactions.put(id, record);
         repository = owner;
-        this.firstKey = firstKey;
+        this.firstKey = id;
 
         transaction.captureLock(this);
     }
@@ -121,6 +130,11 @@ public final class Cluster<Record> {
      */
     void set(final String key, final Record record) {
         waitAndCheckDeadLock();
+        if(dropped) {
+            repository.save(record);
+            return;
+        }
+
         redacted = true;
         data.put(key, record);
     }
@@ -135,6 +149,11 @@ public final class Cluster<Record> {
      */
     void set(final String key, final Record record, final Transaction transaction) {
         lock(transaction);
+        if(dropped) {
+            repository.save(record, transaction);
+            return;
+        }
+
         copyDataForTransactions.put(key, record);
     }
 
@@ -195,6 +214,10 @@ public final class Cluster<Record> {
      */
     Record delete(final String key) {
         waitAndCheckDeadLock();
+        if(dropped) {
+            return repository.innerDelete(key).orElse(null);
+        }
+
         Record record = data.remove(key);
         if (Objects.nonNull(record))
             redacted = true;
@@ -211,6 +234,10 @@ public final class Cluster<Record> {
      */
     Record delete(final String key, final Transaction transaction) {
         lock(transaction);
+        if(dropped) {
+            return repository.innerDelete(key, transaction).orElse(null);
+        }
+
         return copyDataForTransactions.remove(key);
     }
 

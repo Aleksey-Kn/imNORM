@@ -79,7 +79,7 @@ public class FastRepository<Record> extends Repository<Record> {
      */
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record) {
-        data.put(id, new Cluster<>(id, id, record, this));
+        data.put(id, new Cluster<>(id, record, this));
     }
 
     /**
@@ -92,27 +92,7 @@ public class FastRepository<Record> extends Repository<Record> {
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record,
                                                        final Transaction transaction) {
-        data.put(id, new Cluster<>(id, id, record, this, transaction));
-    }
-
-    /**
-     * Add new record if record with current id not exist in data storage.
-     * Update record if current id exist in data storage. Changes execute in current transaction.
-     *
-     * @param record      Record for save
-     * @param transaction Transaction, in which execute save
-     * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
-     * else return inputted record
-     * @throws DeadLockException Current record lock from other transaction
-     */
-    @Override
-    public synchronized Record save(final Record record, final Transaction transaction) {
-        checkForBlocking();
-        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
-        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
-                () -> createClusterForRecord(id, record, transaction));
-
-        return record;
+        data.put(id, new Cluster<>(id, record, this, transaction));
     }
 
     /**
