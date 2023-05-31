@@ -161,7 +161,7 @@ abstract class RepositoryTest {
 
     @Test
     void findById() {
-        assertThat(repository.findById(5)).isEqualTo(new Dto(5));
+        assertThat(repository.findById(5)).isPresent().get().isEqualTo(new Dto(5));
     }
 
     @Test

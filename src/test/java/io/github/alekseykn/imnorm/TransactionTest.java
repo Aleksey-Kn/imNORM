@@ -116,11 +116,9 @@ class TransactionTest {
                 .collect(Collectors.toSet());
 
         Thread thread1 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction ->
-                first.forEach(id -> repository.save(new Dto(id), transaction))).ifPresent(Throwable::printStackTrace),
-                "first");
+                first.forEach(id -> repository.save(new Dto(id), transaction))).ifPresent(Throwable::printStackTrace), "first");
         Thread thread2 = new Thread(() -> Transaction.executeInWaitingTransactionWithRetry(transaction ->
-                second.forEach(id -> repository.save(new Dto(id), transaction))).ifPresent(Throwable::printStackTrace),
-                "second");
+                second.forEach(id -> repository.save(new Dto(id), transaction))).ifPresent(Throwable::printStackTrace), "second");
         thread1.start();
         thread2.start();
         thread1.join();

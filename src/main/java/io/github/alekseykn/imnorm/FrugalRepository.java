@@ -95,7 +95,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
      */
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record) {
-        openClusters.put(id, new Cluster<>(id, id, record, this));
+        openClusters.put(id, new Cluster<>(id, record, this));
         clusterNames.add(id);
         checkAndDropIfTooMuchOpenClusters();
     }
@@ -110,29 +110,9 @@ public class FrugalRepository<Record> extends Repository<Record> {
     @Override
     protected synchronized void createClusterForRecord(final String id, final Record record,
                                                        final Transaction transaction) {
-        openClusters.put(id, new Cluster<>(id, id, record, this, transaction));
+        openClusters.put(id, new Cluster<>(id, record, this, transaction));
         clusterNames.add(id);
         checkAndDropIfTooMuchOpenClusters();
-    }
-
-    /**
-     * Add new record if record with current id not exist in data storage.
-     * Update record if current id exist in data storage. Changes execute in current transaction.
-     *
-     * @param record      Record for save
-     * @param transaction Transaction, in which execute save
-     * @return Record with new id, if auto-generate on and record with current id not exist in data storage,
-     * else return inputted record
-     * @throws DeadLockException Current record lock from other transaction
-     */
-    @Override
-    public synchronized Record save(final Record record, final Transaction transaction) {
-        checkForBlocking();
-        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
-        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
-                () -> createClusterForRecord(id, record, transaction));
-
-        return record;
     }
 
     /**
@@ -468,7 +448,12 @@ public class FrugalRepository<Record> extends Repository<Record> {
     public synchronized void flush() {
         super.flush();
         openClusters.values().forEach(Cluster::flush);
-        openClusters.entrySet().removeIf(cluster -> cluster.getValue().hasNotOpenTransactions());
+        Set<String> forDeleteKeys = openClusters.entrySet().parallelStream()
+                .filter(cluster -> cluster.getValue().hasNotOpenTransactions())
+                .peek(cluster -> cluster.getValue().setDropped(true))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+        openClusters.entrySet().removeIf(entry -> forDeleteKeys.contains(entry.getKey()));
     }
 
     /**
