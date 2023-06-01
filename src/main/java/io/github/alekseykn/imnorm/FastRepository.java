@@ -1,11 +1,9 @@
 package io.github.alekseykn.imnorm;
 
 import io.github.alekseykn.imnorm.exceptions.DeadLockException;
-import io.github.alekseykn.imnorm.exceptions.InternalImnormException;
 import io.github.alekseykn.imnorm.where.Condition;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +20,7 @@ public class FastRepository<Record> extends Repository<Record> {
     /**
      * The search tree where clusters and their initial keys are mapped
      */
-    private final TreeMap<String, Cluster<Record>> data = new TreeMap<>();
+    private final TreeMap<Integer, Cluster<Record>> data = new TreeMap<>();
 
     /**
      * Load clusters from file system to RAM
@@ -32,26 +30,12 @@ public class FastRepository<Record> extends Repository<Record> {
      */
     FastRepository(final Class<Record> type, final File directory) {
         super(type, directory);
-        Scanner scanner;
-        String now;
-        TreeMap<String, Record> tempClusterData;
-        int index;
 
-        try {
-            for (File file : Objects.requireNonNull(directory.listFiles((dir, name) ->
-                    !name.equals("_sequence.imnorm")))) {
-                tempClusterData = new TreeMap<>();
-                scanner = new Scanner(file);
-                while (scanner.hasNextLine()) {
-                    now = scanner.nextLine();
-                    index = now.indexOf(':');
-                    tempClusterData.put(now.substring(0, index), gson.fromJson(now.substring(index + 1), type));
-                }
-                data.put(file.getName(), new Cluster<>(file.getName(), tempClusterData, this));
-                scanner.close();
-            }
-        } catch (FileNotFoundException e) {
-            throw new InternalImnormException(e);
+
+        for (File file : Objects.requireNonNull(directory.listFiles((dir, name) ->
+                !name.equals("_sequence.imnorm")))) {
+            data.put(Integer.parseInt(file.getName()),
+                    new Cluster<>(Integer.parseInt(file.getName()), clusterFileManipulator.read(file.toPath()), this));
         }
     }
 
@@ -62,8 +46,8 @@ public class FastRepository<Record> extends Repository<Record> {
      * @return Cluster, which can contains current id, or null, if such cluster not contains in data storage
      */
     @Override
-    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id) {
-        Map.Entry<String, Cluster<Record>> entry = data.floorEntry(id);
+    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final int id) {
+        Map.Entry<Integer, Cluster<Record>> entry = data.floorEntry(id);
         if (Objects.isNull(entry)) {
             return Optional.empty();
         } else {
@@ -74,25 +58,27 @@ public class FastRepository<Record> extends Repository<Record> {
     /**
      * Add new cluster and insert current record in it
      *
-     * @param id     String interpretation of id
+     * @param hash   Hash from id
+     * @param id     ID of record
      * @param record The record being added to data storage
      */
     @Override
-    protected synchronized void createClusterForRecord(final String id, final Record record) {
-        data.put(id, new Cluster<>(id, record, this));
+    protected synchronized void createClusterForRecord(final int hash, final Object id, final Record record) {
+        data.put(hash, new Cluster<>(hash, id, record, this));
     }
 
     /**
      * Add new cluster and insert current record in current transaction
      *
-     * @param id          String interpretation of id
+     * @param hash   Hash from id
+     * @param id     ID of record
      * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected synchronized void createClusterForRecord(final String id, final Record record,
+    protected synchronized void createClusterForRecord(final int hash, final Object id, final Record record,
                                                        final Transaction transaction) {
-        data.put(id, new Cluster<>(id, record, this, transaction));
+        data.put(hash, new Cluster<>(hash, id, record, this, transaction));
     }
 
     /**
@@ -166,7 +152,7 @@ public class FastRepository<Record> extends Repository<Record> {
                 startIndex -= clusterRecord.size();
             } else {
                 afterSkippedClusterValues = clusterRecord.stream()
-                        .sorted(Comparator.comparing(this::getIdFromRecord))
+                        .sorted(Comparator.comparing(this::getHashIdFromRecord))
                         .skip(startIndex)
                         .limit(rowCount)
                         .collect(Collectors.toList());
@@ -219,7 +205,7 @@ public class FastRepository<Record> extends Repository<Record> {
         }
         return pagination(clustersData, startIndex, rowCount);
     }
-    
+
     /**
      * Find all records in current repository, suitable for the specified condition
      *
@@ -284,7 +270,7 @@ public class FastRepository<Record> extends Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     @Override
-    public Set<Record> findAll(final Condition<Record> condition, final int startIndex, final int rowCount, 
+    public Set<Record> findAll(final Condition<Record> condition, final int startIndex, final int rowCount,
                                final Transaction transaction) {
         List<Collection<Record>> clustersData;
         synchronized (this) {
@@ -328,7 +314,7 @@ public class FastRepository<Record> extends Repository<Record> {
     protected synchronized void deleteClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.isEmpty()) {
             try {
-                Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
+                Files.delete(Path.of(directory.getAbsolutePath(), Integer.toString(cluster.getFirstKey())));
             } catch (IOException ignore) {
             }
             data.remove(cluster.getFirstKey());
@@ -342,7 +328,7 @@ public class FastRepository<Record> extends Repository<Record> {
             data.put(newCluster.getFirstKey(), newCluster);
         }
     }
-    
+
     /**
      * Checks the existence of a record with the specified id
      *
@@ -351,9 +337,9 @@ public class FastRepository<Record> extends Repository<Record> {
      */
     @Override
     protected boolean existsById(final Object id) {
-        String stringId = getStringHashFromId(id);
-        if(stringId.compareTo(data.firstKey()) > 0)
-            return data.floorEntry(stringId).getValue().containsKey(stringId);
+        int hash = getHashFromId(id);
+        if (hash > data.firstKey())
+            return data.floorEntry(hash).getValue().containsKey(hash, id);
         else
             return false;
     }

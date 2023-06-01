@@ -1,8 +1,8 @@
 package io.github.alekseykn.imnorm;
 
-import com.google.gson.Gson;
 import io.github.alekseykn.imnorm.annotations.Id;
 import io.github.alekseykn.imnorm.exceptions.*;
+import io.github.alekseykn.imnorm.utils.ClusterFileManipulator;
 import io.github.alekseykn.imnorm.utils.FieldUtil;
 import io.github.alekseykn.imnorm.where.Condition;
 
@@ -22,7 +22,7 @@ public abstract class Repository<Record> {
     /**
      * Approximate maximum cluster size
      */
-    protected static final int CLUSTER_MAX_SIZE = 10_000;
+    protected static final int CLUSTER_MAX_SIZE = 100_000;
 
     /**
      * Entity id field
@@ -42,7 +42,7 @@ public abstract class Repository<Record> {
     /**
      * Object for parse data entity to json
      */
-    protected final Gson gson = new Gson();
+    protected final ClusterFileManipulator<Record> clusterFileManipulator;
 
     /**
      * Approximate size of one record in json string
@@ -82,6 +82,7 @@ public abstract class Repository<Record> {
         recordId = FieldUtil.getIdField(type);
         needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
         sizeOfEntity = FieldUtil.countFields(type) * 50;
+        clusterFileManipulator = new ClusterFileManipulator<>(type, recordId);
 
         if (needGenerateId) {
             try (DataInputStream fileInputStream = new DataInputStream(
@@ -94,11 +95,22 @@ public abstract class Repository<Record> {
     }
 
     /**
+     * Function for get hash id entity id as int
+     */
+    protected int getHashIdFromRecord(final Record record) {
+        try {
+            return getHashFromId(recordId.get(record));
+        } catch (IllegalAccessException e) {
+            throw new InternalImnormException(e);
+        }
+    }
+
+    /**
      * Function for get data entity id as string
      */
-    protected String getIdFromRecord(final Record record) {
+    protected Object getOriginalIdFromRecord(final Record record) {
         try {
-            return getStringHashFromId(recordId.get(record));
+            return recordId.get(record);
         } catch (IllegalAccessException e) {
             throw new InternalImnormException(e);
         }
@@ -107,61 +119,56 @@ public abstract class Repository<Record> {
     /**
      * Function for get string hash of id
      */
-    protected String getStringHashFromId(final Object id) {
-        String key = String.valueOf(id);
-        if (!(id instanceof Number)) {
-            key = key.replaceAll("[\"\\\\|/*:?<>]", "_");
-            if (key.length() > 240)
-                key = key.substring(0, 240);
-            key = key + key.hashCode();
-        }
-        return key;
-    }
-
-    /**
-     * Determines whether to generate an identifier for the current record
-     *
-     * @param record The record being checked
-     * @return True, if the current record needs to generate an ID
-     */
-    protected boolean needGenerateIdForRecord(final Record record) {
-        try {
-            return needGenerateId
-                    && switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
-                case "byte" -> recordId.get(record).equals((byte) 0);
-                case "short" -> recordId.get(record).equals((short) 0);
-                case "int" -> recordId.get(record).equals(0);
-                case "long" -> recordId.get(record).equals(0L);
-                case "float" -> recordId.get(record).equals(0f);
-                case "double" -> recordId.get(record).equals(0d);
-                case "string" -> recordId.get(record).toString().isEmpty();
-                default -> throw new IllegalGeneratedIdTypeException();
-            };
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e);
+    protected int getHashFromId(final Object id) {
+        if (id instanceof Integer || id instanceof Byte || id instanceof Short || id instanceof Character) {
+            return (int) id;
+        } else {
+            return id.hashCode();
         }
     }
 
     /**
-     * Create and set id needed type for current record
+     * Create and set id needed type for current record if needed
      *
-     * @param record Record, which needed create id
-     * @return Created id
+     * @param record Record, which needed to create id
      */
-    protected String generateAndSetIdForRecord(final Record record) {
-        try {
-            switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
-                case "byte" -> recordId.set(record, (byte) sequence);
-                case "short" -> recordId.set(record, (short) sequence);
-                case "int" -> recordId.set(record, (int) sequence);
-                case "long" -> recordId.set(record, sequence);
-                case "float" -> recordId.set(record, (float) sequence);
-                case "double" -> recordId.set(record, (double) sequence);
-                default -> recordId.set(record, Long.toString(sequence));
+    protected void generateAndSetIdForRecordIfNeeded(final Record record) {
+        if (needGenerateId) {
+            try {
+                switch (recordId.getType().getSimpleName().toLowerCase(Locale.ROOT)) {
+                    case "byte" -> {
+                        if (recordId.get(record).equals((byte) 0))
+                            recordId.set(record, (byte) sequence++);
+                    }
+                    case "short" -> {
+                        if (recordId.get(record).equals((short) 0))
+                            recordId.set(record, (short) sequence++);
+                    }
+                    case "int" -> {
+                        if (recordId.get(record).equals(0))
+                            recordId.set(record, (int) sequence++);
+                    }
+                    case "long" -> {
+                        if (recordId.get(record).equals(0L))
+                            recordId.set(record, sequence++);
+                    }
+                    case "float" -> {
+                        if (recordId.get(record).equals(0f))
+                            recordId.set(record, (float) sequence++);
+                    }
+                    case "double" -> {
+                        if (recordId.get(record).equals(0d))
+                            recordId.set(record, (double) sequence++);
+                    }
+                    case "string" -> {
+                        if (recordId.get(record).toString().isEmpty())
+                            recordId.set(record, Long.toString(sequence++));
+                    }
+                    default -> throw new IllegalGeneratedIdTypeException();
+                }
+            } catch (IllegalAccessException e) {
+                throw new InternalImnormException(e);
             }
-            return Long.toString(sequence++);
-        } catch (IllegalAccessException e) {
-            throw new InternalImnormException(e);
         }
     }
 
@@ -171,7 +178,7 @@ public abstract class Repository<Record> {
      * @param id Record id, for which execute search
      * @return Cluster, which can contain current record
      */
-    protected abstract Optional<Cluster<Record>> findCurrentClusterFromId(String id);
+    protected abstract Optional<Cluster<Record>> findCurrentClusterFromId(int id);
 
     /**
      * Add new cluster and insert current record
@@ -179,7 +186,7 @@ public abstract class Repository<Record> {
      * @param id     String interpretation of id
      * @param record The record being added to data storage
      */
-    protected abstract void createClusterForRecord(String id, Record record);
+    protected abstract void createClusterForRecord(int hashId, Object id, Record record);
 
     /**
      * Add new cluster and insert current record in current transaction
@@ -188,7 +195,7 @@ public abstract class Repository<Record> {
      * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
      */
-    protected abstract void createClusterForRecord(String id, Record record, Transaction transaction);
+    protected abstract void createClusterForRecord(int hashId, Object id, Record record, Transaction transaction);
 
     /**
      * Add new record if record with current id not exist in data storage.
@@ -202,11 +209,14 @@ public abstract class Repository<Record> {
      */
     public synchronized Record save(final Record record) {
         checkForBlocking();
-        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
-        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> {
-            cluster.set(id, record);
+        generateAndSetIdForRecordIfNeeded(record);
+        int hashId = getHashIdFromRecord(record);
+        Object id = getOriginalIdFromRecord(record);
+
+        findCurrentClusterFromId(hashId).ifPresentOrElse(cluster -> {
+            cluster.set(hashId, id, record);
             splitClusterIfNeed(cluster);
-        }, () -> createClusterForRecord(id, record));
+        }, () -> createClusterForRecord(hashId, id, record));
 
         return record;
     }
@@ -223,11 +233,37 @@ public abstract class Repository<Record> {
      */
     public synchronized Record save(final Record record, final Transaction transaction) {
         checkForBlocking();
-        String id = needGenerateIdForRecord(record) ? generateAndSetIdForRecord(record) : getIdFromRecord(record);
-        findCurrentClusterFromId(id).ifPresentOrElse(cluster -> cluster.set(id, record, transaction),
-                () -> createClusterForRecord(id, record, transaction));
+        generateAndSetIdForRecordIfNeeded(record);
+        int hashId = getHashIdFromRecord(record);
+        Object id = getOriginalIdFromRecord(record);
+
+        findCurrentClusterFromId(hashId).ifPresentOrElse(cluster -> cluster.set(hashId, id, record, transaction),
+                () -> createClusterForRecord(hashId, id, record, transaction));
 
         return record;
+    }
+
+    /**
+     * Create record map from record list
+     *
+     * @param records Record list
+     * @return Map, with contains hash, id and record
+     */
+    private TreeMap<Integer, Map<Object, Record>> convertListToMap(final List<Record> records) {
+        TreeMap<Integer, Map<Object, Record>> data = new TreeMap<>();
+        int hash;
+        Object id;
+
+        for (Record record : records) {
+            id = getOriginalIdFromRecord(record);
+            hash = getHashFromId(id);
+            if (!data.containsKey(hash)) {
+                data.put(hash, new HashMap<>());
+            }
+            data.get(hash).put(id, record);
+        }
+
+        return data;
     }
 
     /**
@@ -236,9 +272,7 @@ public abstract class Repository<Record> {
      * @param records Records, for which needed to create new cluster
      */
     protected Cluster<Record> createClusterForRecords(final List<Record> records) {
-        TreeMap<String, Record> data = records.stream()
-                .collect(Collectors.toMap(this::getIdFromRecord, record -> record, (first, second) -> first,
-                        TreeMap::new));
+        TreeMap<Integer, Map<Object, Record>> data = convertListToMap(records);
         return new Cluster<>(data.firstKey(), data, this);
     }
 
@@ -249,9 +283,7 @@ public abstract class Repository<Record> {
      * @param transaction Transaction, in which execute create
      */
     protected Cluster<Record> createClusterForRecords(final List<Record> records, final Transaction transaction) {
-        TreeMap<String, Record> data = records.stream()
-                .collect(Collectors.toMap(this::getIdFromRecord, record -> record, (first, second) -> first,
-                        TreeMap::new));
+        TreeMap<Integer, Map<Object, Record>> data = convertListToMap(records);
         return new Cluster<>(data.firstKey(), data, this, transaction);
     }
 
@@ -263,10 +295,8 @@ public abstract class Repository<Record> {
      */
     private List<Record> createRecordsSortedList(final Collection<Record> records) {
         return records.stream()
-                .peek(record -> {
-                    if (needGenerateIdForRecord(record))
-                        generateAndSetIdForRecord(record);
-                }).sorted(Comparator.comparing(this::getIdFromRecord).reversed())
+                .peek(this::generateAndSetIdForRecordIfNeeded)
+                .sorted(Comparator.comparing(this::getHashIdFromRecord).reversed())
                 .collect(Collectors.toList());
     }
 
@@ -283,14 +313,14 @@ public abstract class Repository<Record> {
             return Set.of();
         List<Record> sortedRecords = createRecordsSortedList(records);
 
-        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getIdFromRecord(sortedRecords.get(0)));
+        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getHashIdFromRecord(sortedRecords.get(0)));
         if (cluster.isEmpty()) {
             createClusterForRecords(sortedRecords);
         } else {
-            String id;
+            int id;
             for (Record record : records) {
-                id = getIdFromRecord(record);
-                if (id.compareTo(cluster.get().getFirstKey()) < 0) {
+                id = getHashIdFromRecord(record);
+                if (id < cluster.get().getFirstKey()) {
                     splitClusterIfNeed(cluster.get());
                     cluster = findCurrentClusterFromId(id);
                     if (cluster.isEmpty()) {
@@ -299,7 +329,7 @@ public abstract class Repository<Record> {
                         return new HashSet<>(sortedRecords);
                     }
                 }
-                cluster.get().set(id, record);
+                cluster.get().set(id, getOriginalIdFromRecord(record), record);
             }
             splitClusterIfNeed(cluster.get());
         }
@@ -321,14 +351,14 @@ public abstract class Repository<Record> {
             return Set.of();
         List<Record> sortedRecords = createRecordsSortedList(records);
 
-        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getIdFromRecord(sortedRecords.get(0)));
+        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(getHashIdFromRecord(sortedRecords.get(0)));
         if (cluster.isEmpty()) {
             createClusterForRecords(sortedRecords);
         } else {
-            String id;
+            int id;
             for (Record record : records) {
-                id = getIdFromRecord(record);
-                if (id.compareTo(cluster.get().getFirstKey()) < 0) {
+                id = getHashIdFromRecord(record);
+                if (id < cluster.get().getFirstKey()) {
                     cluster = findCurrentClusterFromId(id);
                     if (cluster.isEmpty()) {
                         createClusterForRecords(sortedRecords.subList(sortedRecords.indexOf(record),
@@ -336,7 +366,7 @@ public abstract class Repository<Record> {
                         return new HashSet<>(sortedRecords);
                     }
                 }
-                cluster.get().set(id, record, transaction);
+                cluster.get().set(id, getOriginalIdFromRecord(record), record, transaction);
             }
             splitClusterIfNeed(cluster.get());
         }
@@ -352,8 +382,8 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public Optional<Record> findById(final Object id) {
-        String realId = getStringHashFromId(id);
-        return Optional.ofNullable(findCurrentClusterFromId(realId).orElseThrow().get(realId));
+        int hash = getHashFromId(id);
+        return Optional.ofNullable(findCurrentClusterFromId(hash).orElseThrow().get(hash, id));
     }
 
     /**
@@ -365,8 +395,8 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public Optional<Record> findById(final Object id, final Transaction transaction) {
-        String realId = getStringHashFromId(id);
-        return Optional.ofNullable(findCurrentClusterFromId(realId).orElseThrow().get(realId, transaction));
+        int hash = getHashFromId(id);
+        return Optional.ofNullable(findCurrentClusterFromId(hash).orElseThrow().get(hash, id, transaction));
     }
 
     /**
@@ -457,7 +487,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Optional<Record> deleteById(final Object id) {
-        return innerDelete(getStringHashFromId(id));
+        return innerDelete(getHashFromId(id), id);
     }
 
     /**
@@ -470,7 +500,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Optional<Record> deleteById(final Object id, final Transaction transaction) {
-        return innerDelete(getStringHashFromId(id), transaction);
+        return innerDelete(getHashFromId(id), id, transaction);
     }
 
     /**
@@ -481,7 +511,7 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Optional<Record> delete(final Record record) {
-        return innerDelete(getIdFromRecord(record));
+        return innerDelete(getHashIdFromRecord(record), getOriginalIdFromRecord(record));
     }
 
     /**
@@ -493,24 +523,25 @@ public abstract class Repository<Record> {
      * @throws DeadLockException Current record lock from other transaction
      */
     public synchronized Optional<Record> delete(final Record record, final Transaction transaction) {
-        return innerDelete(getIdFromRecord(record), transaction);
+        return innerDelete(getHashIdFromRecord(record), getOriginalIdFromRecord(record), transaction);
     }
 
     /**
      * Remove record with specified id hash. If current cluster becomes empty it is deleted.
      *
-     * @param realId          Hash of id of the record being deleted
+     * @param hash Hash of id of the record being deleted
+     * @param id   ID of the record being deleted
      * @return Record, which was deleted from repository in current transaction, or null,
      * if specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    protected synchronized Optional<Record> innerDelete(final String realId) {
+    protected synchronized Optional<Record> innerDelete(final int hash, final Object id) {
         checkForBlocking();
-        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(realId);
+        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(hash);
         if (cluster.isEmpty()) {
             return Optional.empty();
         } else {
-            Record record = cluster.get().delete(realId);
+            Record record = cluster.get().delete(hash, id);
             deleteClusterIfNeed(cluster.get());
             return Optional.ofNullable(record);
         }
@@ -519,19 +550,20 @@ public abstract class Repository<Record> {
     /**
      * Remove record with specified id hash in current transaction
      *
-     * @param realId          Hash of id of the record being deleted
+     * @param hash        Hash of id of the record being deleted
+     * @param id          ID of the record being deleted
      * @param transaction Transaction, in which execute delete
      * @return Record, which was deleted from repository in current transaction, or null,
      * if specified record not exist in current transaction
      * @throws DeadLockException Current record lock from other transaction
      */
-    protected synchronized Optional<Record> innerDelete(final String realId, final Transaction transaction) {
+    protected synchronized Optional<Record> innerDelete(final int hash, final Object id, final Transaction transaction) {
         checkForBlocking();
-        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(realId);
+        Optional<Cluster<Record>> cluster = findCurrentClusterFromId(hash);
         if (cluster.isEmpty()) {
             return Optional.empty();
         } else {
-            return Optional.ofNullable(cluster.get().delete(realId, transaction));
+            return Optional.ofNullable(cluster.get().delete(hash, id, transaction));
         }
     }
 

@@ -4,10 +4,12 @@ import io.github.alekseykn.imnorm.annotations.Id;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.ToString;
 
 @Getter
 @EqualsAndHashCode
 @AllArgsConstructor
+@ToString
 public class DtoWithGenerateId {
     @Id(autoGenerate = true)
     private int id;

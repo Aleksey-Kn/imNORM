@@ -127,16 +127,16 @@ abstract class RepositoryTest {
         assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(2, 4, 8);
     }
 
-    @Test
+    @RepeatedTest(500)
     void saveAllWithPartialGenerateId() {
         List<DtoWithGenerateId> list = List.of(new DtoWithGenerateId(2),
-                new DtoWithGenerateId(33, 4),
+                new DtoWithGenerateId(3333, 4),
                 new DtoWithGenerateId(8));
 
         withGenerateIdRepository.saveAll(list);
 
         assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(2, 4, 8);
-        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getId).contains(33);
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getId).contains(3333);
     }
 
     @Test
@@ -223,7 +223,7 @@ abstract class RepositoryTest {
 
     @Test
     void findAllWithPaginationSmallRowCount() {
-        assertThat(repository.findAll(1, 1)).extracting(Dto::getId).containsOnly(25);
+        assertThat(repository.findAll(1, 1)).extracting(Dto::getId).containsOnly(5);
     }
 
     @Test
@@ -253,7 +253,7 @@ abstract class RepositoryTest {
                     }
                 }).count()).isEqualTo(3);
     }
-    
+
     @Test
     void findAllWithCondition() {
         assertThat(repository.findAll(new FieldCondition<>("id", CompareMode.MORE, 0)))
@@ -264,15 +264,17 @@ abstract class RepositoryTest {
     void findAllWithConditionAndPagination() {
         repository.save(new Dto(100));
 
-        assertThat(repository.findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1))
-                .extracting(Dto::getId).containsOnly(25);
+        assertThat(repository
+                .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1))
+                .extracting(Dto::getId)
+                .containsOnly(25);
     }
-    
+
     @Test
     void findAllWithLambdaCondition() {
         assertThat(repository.findAll(record -> record.equals(new Dto(-1)))).extracting(Dto::getId).containsOnly(-1);
     }
-    
+
     @RepeatedTest(1000)
     void findAllWithLambdaConditionWithTransaction() {
         Transaction transaction = Transaction.waitingTransaction();
@@ -287,9 +289,10 @@ abstract class RepositoryTest {
         repository.save(new Dto(100));
 
         Transaction transaction = Transaction.waitingTransaction();
-        assertThat(repository.findAll(
-                new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1, transaction))
-                .extracting(Dto::getId).containsOnly(25);
+        assertThat(repository
+                .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 1, 1, transaction))
+                .extracting(Dto::getId)
+                .containsOnly(25);
         transaction.commit();
     }
 
@@ -303,7 +306,7 @@ abstract class RepositoryTest {
     @Test
     void findAllWithPaginationSmallRowCountWithTransaction() {
         Transaction transaction = Transaction.waitingTransaction();
-        assertThat(repository.findAll(1, 1, transaction)).extracting(Dto::getId).containsOnly(25);
+        assertThat(repository.findAll(1, 1, transaction)).extracting(Dto::getId).containsOnly(5);
         transaction.commit();
     }
 
@@ -318,14 +321,14 @@ abstract class RepositoryTest {
 
         assertThat(repository
                 .findAll(new FieldCondition<>("id", CompareMode.MORE, 0), 4, 3))
-                .extracting(Dto::getId).containsOnly(4, 5, 6);
+                .extracting(Dto::getId).containsOnly(5, 6, 7);
     }
 
     @Test
     void size() {
         assertThat(repository.size()).isEqualTo(3);
     }
-    
+
     @Test
     void existsByIdMustReturnTrue() {
         assertThat(repository.existsById(5)).isTrue();
