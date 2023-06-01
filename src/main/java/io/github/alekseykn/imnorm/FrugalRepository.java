@@ -22,12 +22,12 @@ public class FrugalRepository<Record> extends Repository<Record> {
     /**
      * Set of exists clusters in file data storage
      */
-    private final TreeSet<String> clusterNames = new TreeSet<>();
+    private final TreeSet<Integer> clusterNames = new TreeSet<>();
 
     /**
      * Set of uploaded cluster in RAM
      */
-    private final LinkedHashMap<String, Cluster<Record>> openClusters;
+    private final LinkedHashMap<Integer, Cluster<Record>> openClusters;
 
     /**
      * Max clusters quantity, which repository can upload in RAM
@@ -46,32 +46,30 @@ public class FrugalRepository<Record> extends Repository<Record> {
         this.maxClustersQuantity = maxClustersQuantity;
         assert maxClustersQuantity > 1;
         openClusters = new LinkedHashMap<>(maxClustersQuantity + 1);
-        clusterNames.addAll(Arrays.asList(Objects.requireNonNull(directory.list((dir, name) ->
-                !name.equals("_sequence.imnorm")))));
+        clusterNames.addAll(Arrays
+                .stream(Objects.requireNonNull(directory.list((dir, name) -> !name.equals("_sequence.imnorm"))))
+                .map(Integer::parseInt)
+                .collect(Collectors.toSet()));
     }
 
     /**
      * Find cluster, which can contains current id. If such cluster not exists in RAM, upload it from file data storage
      *
-     * @param id             Record id, for which execute search
+     * @param id Record id, for which execute search
      * @return Cluster, which can contains current id, or null, if such cluster not contains in data storage
      */
-    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final String id){
-        String clusterId = clusterNames.floor(id);
+    @Override
+    protected synchronized Optional<Cluster<Record>> findCurrentClusterFromId(final int id) {
+        Integer clusterId = clusterNames.floor(id);
         if (openClusters.containsKey(clusterId)) {
             return Optional.of(openClusters.get(clusterId));
         } else {
             if (Objects.isNull(clusterId)) {
                 return Optional.empty();
             } else {
-                Path clusterPath = Path.of(directory.getAbsolutePath(), clusterId);
-                try (Stream<String> stream = Files.lines(clusterPath)) {
-                    TreeMap<String, Record> tempClusterData = new TreeMap<>();
-                    stream.forEach(line -> {
-                        int index = line.indexOf(':');
-                        tempClusterData.put(line.substring(0, index),
-                                gson.fromJson(line.substring(index + 1), type));
-                    });
+                try {
+                    Path clusterPath = Path.of(directory.getAbsolutePath(), clusterId.toString());
+                    TreeMap<Integer, Map<Object, Record>> tempClusterData = clusterFileManipulator.read(clusterPath);
                     if (tempClusterData.isEmpty()) {
                         Files.delete(clusterPath);
                         return Optional.empty();
@@ -94,24 +92,24 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @param record The record being added to data storage
      */
     @Override
-    protected synchronized void createClusterForRecord(final String id, final Record record) {
-        openClusters.put(id, new Cluster<>(id, record, this));
-        clusterNames.add(id);
+    protected synchronized void createClusterForRecord(final int hash, final Object id, final Record record) {
+        openClusters.put(hash, new Cluster<>(hash, id, record, this));
+        clusterNames.add(hash);
         checkAndDropIfTooMuchOpenClusters();
     }
 
     /**
      * Add new cluster and insert current record in current transaction
      *
-     * @param id          String interpretation of id
+     * @param hash          String interpretation of hash
      * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
      */
     @Override
-    protected synchronized void createClusterForRecord(final String id, final Record record,
+    protected synchronized void createClusterForRecord(final int hash, final Object id, final Record record,
                                                        final Transaction transaction) {
-        openClusters.put(id, new Cluster<>(id, record, this, transaction));
-        clusterNames.add(id);
+        openClusters.put(hash, new Cluster<>(hash, id, record, this, transaction));
+        clusterNames.add(hash);
         checkAndDropIfTooMuchOpenClusters();
     }
 
@@ -156,15 +154,9 @@ public class FrugalRepository<Record> extends Repository<Record> {
     private Stream<Record> findRecordFromNotOpenClusters() {
         return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
-                .flatMap(clusterName -> {
-                    try {
-                        return Files.lines(Path.of(directory.getAbsolutePath(), clusterName));
-                    } catch (IOException e) {
-                        throw new InternalImnormException(e);
-                    }
-                })
-                .map(s -> s.substring(s.indexOf(':') + 1))
-                .map(record -> gson.fromJson(record, type));
+                .flatMap(clusterName -> clusterFileManipulator
+                        .read(Path.of(directory.getAbsolutePath(), Integer.toString(clusterName))).values().stream())
+                .flatMap(map -> map.values().stream());
     }
 
     /**
@@ -207,9 +199,9 @@ public class FrugalRepository<Record> extends Repository<Record> {
      * @return Part of the input data obtained based on pagination conditions
      * @throws DeadLockException Current record lock from other transaction
      */
-    private List<Record> pagination(final Stream<Record> clusterRecords, final int startIndex, final int rowCount) {
-        return clusterRecords
-                .sorted(Comparator.comparing(this::getIdFromRecord))
+    private List<Record> pagination(final Collection<Record> clusterRecords, final int startIndex, final int rowCount) {
+        return clusterRecords.stream()
+                .sorted(Comparator.comparing(this::getHashIdFromRecord))
                 .skip(startIndex)
                 .limit(rowCount)
                 .collect(Collectors.toList());
@@ -228,39 +220,36 @@ public class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
-        List<String> readLines = null;
+        List<Record> readLines = null;
 
-        try {
-            for (String clusterName : clusterNames) {
-                if (openClusters.containsKey(clusterName)) {
-                    currentClusterSize = openClusters.get(clusterName).size();
-                } else {
-                    readLines = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .collect(Collectors.toList());
-                    currentClusterSize = readLines.size();
-                }
-                if (currentClusterSize < startIndex) {
-                    startIndex -= currentClusterSize;
-                } else {
-                    afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
-                                    ? openClusters.get(clusterName).findAll().stream()
-                                    : Objects.requireNonNull(readLines).stream()
-                                    .map(s -> s.substring(s.indexOf(':') + 1))
-                                    .map(s -> gson.fromJson(s, type)),
-                            startIndex,
-                            rowCount);
-                    result.addAll(afterSkippedClusterValues);
-
-                    rowCount -= afterSkippedClusterValues.size();
-                    startIndex = 0;
-                }
-                if (rowCount == 0)
-                    break;
+        for (int clusterName : clusterNames) {
+            if (openClusters.containsKey(clusterName)) {
+                currentClusterSize = openClusters.get(clusterName).size();
+            } else {
+                readLines = clusterFileManipulator
+                        .read(Path.of(directory.getAbsolutePath(), Integer.toString(clusterName)))
+                        .values()
+                        .stream()
+                        .flatMap(map -> map.values().stream())
+                        .collect(Collectors.toList());
+                currentClusterSize = readLines.size();
             }
-            return result;
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
+            if (currentClusterSize < startIndex) {
+                startIndex -= currentClusterSize;
+            } else {
+                afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
+                                ? openClusters.get(clusterName).findAll() : Objects.requireNonNull(readLines),
+                        startIndex,
+                        rowCount);
+                result.addAll(afterSkippedClusterValues);
+
+                rowCount -= afterSkippedClusterValues.size();
+                startIndex = 0;
+            }
+            if (rowCount == 0)
+                break;
         }
+        return result;
     }
 
     /**
@@ -277,39 +266,37 @@ public class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> afterSkippedClusterValues;
         int currentClusterSize;
-        List<String> readLines = null;
+        List<Record> readLines = null;
 
-        try {
-            for (String clusterName : clusterNames) {
-                if (openClusters.containsKey(clusterName)) {
-                    currentClusterSize = openClusters.get(clusterName).sizeWithTransaction();
-                } else {
-                    readLines = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                            .collect(Collectors.toList());
-                    currentClusterSize = readLines.size();
-                }
-                if (currentClusterSize < startIndex) {
-                    startIndex -= currentClusterSize;
-                } else {
-                    afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
-                                    ? openClusters.get(clusterName).findAll(transaction).stream()
-                                    : Objects.requireNonNull(readLines).stream()
-                                    .map(s -> s.substring(s.indexOf(':') + 1))
-                                    .map(s -> gson.fromJson(s, type)),
-                            startIndex,
-                            rowCount);
-                    result.addAll(afterSkippedClusterValues);
-
-                    rowCount -= afterSkippedClusterValues.size();
-                    startIndex = 0;
-                }
-                if (rowCount == 0)
-                    break;
+        for (int clusterName : clusterNames) {
+            if (openClusters.containsKey(clusterName)) {
+                currentClusterSize = openClusters.get(clusterName).sizeWithTransaction();
+            } else {
+                readLines = clusterFileManipulator
+                        .read(Path.of(directory.getAbsolutePath(), Integer.toString(clusterName)))
+                        .values()
+                        .stream()
+                        .flatMap(map -> map.values().stream())
+                        .collect(Collectors.toList());
+                currentClusterSize = readLines.size();
             }
-            return result;
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
+            if (currentClusterSize < startIndex) {
+                startIndex -= currentClusterSize;
+            } else {
+                afterSkippedClusterValues = pagination(openClusters.containsKey(clusterName)
+                                ? openClusters.get(clusterName).findAll(transaction)
+                                : Objects.requireNonNull(readLines),
+                        startIndex,
+                        rowCount);
+                result.addAll(afterSkippedClusterValues);
+
+                rowCount -= afterSkippedClusterValues.size();
+                startIndex = 0;
+            }
+            if (rowCount == 0)
+                break;
         }
+        return result;
     }
 
     /**
@@ -359,31 +346,28 @@ public class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> records;
 
-        try {
-            for (String clusterName : clusterNames) {
-                records = (openClusters.containsKey(clusterName)
-                        ? openClusters.get(clusterName).findAll().stream()
-                        : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                        .map(s -> s.substring(s.indexOf(':') + 1))
-                        .map(s -> gson.fromJson(s, type)))
-                        .filter(condition::fitsCondition)
-                        .collect(Collectors.toList());
-                if (records.size() < startIndex) {
-                    startIndex -= records.size();
-                } else {
-                    records = pagination(records.stream(), startIndex, rowCount);
-                    result.addAll(records);
+        for (int clusterName : clusterNames) {
+            records = (openClusters.containsKey(clusterName)
+                    ? openClusters.get(clusterName).findAll().stream()
+                    : clusterFileManipulator.read(Path.of(directory.getAbsolutePath(), Integer.toString(clusterName)))
+                    .values()
+                    .stream()
+                    .flatMap(map -> map.values().stream()))
+                    .filter(condition::fitsCondition)
+                    .collect(Collectors.toList());
+            if (records.size() < startIndex) {
+                startIndex -= records.size();
+            } else {
+                records = pagination(records, startIndex, rowCount);
+                result.addAll(records);
 
-                    rowCount -= records.size();
-                    startIndex = 0;
-                }
-                if (rowCount == 0)
-                    break;
+                rowCount -= records.size();
+                startIndex = 0;
             }
-            return result;
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
+            if (rowCount == 0)
+                break;
         }
+        return result;
     }
 
     /**
@@ -402,31 +386,28 @@ public class FrugalRepository<Record> extends Repository<Record> {
         HashSet<Record> result = new HashSet<>(rowCount);
         List<Record> records;
 
-        try {
-            for (String clusterName : clusterNames) {
-                records = (openClusters.containsKey(clusterName)
-                        ? openClusters.get(clusterName).findAll(transaction).stream()
-                        : Files.lines(Path.of(directory.getAbsolutePath(), clusterName))
-                        .map(s -> s.substring(s.indexOf(':') + 1))
-                        .map(s -> gson.fromJson(s, type)))
-                        .filter(condition::fitsCondition)
-                        .collect(Collectors.toList());
-                if (records.size() < startIndex) {
-                    startIndex -= records.size();
-                } else {
-                    records = pagination(records.stream(), startIndex, rowCount);
-                    result.addAll(records);
+        for (int clusterName : clusterNames) {
+            records = (openClusters.containsKey(clusterName)
+                    ? openClusters.get(clusterName).findAll(transaction).stream()
+                    : clusterFileManipulator.read(Path.of(directory.getAbsolutePath(), Integer.toString(clusterName)))
+                    .values()
+                    .stream()
+                    .flatMap(map -> map.values().stream()))
+                    .filter(condition::fitsCondition)
+                    .collect(Collectors.toList());
+            if (records.size() < startIndex) {
+                startIndex -= records.size();
+            } else {
+                records = pagination(records, startIndex, rowCount);
+                result.addAll(records);
 
-                    rowCount -= records.size();
-                    startIndex = 0;
-                }
-                if (rowCount == 0)
-                    break;
+                rowCount -= records.size();
+                startIndex = 0;
             }
-            return result;
-        } catch (IOException e) {
-            throw new InternalImnormException(e);
+            if (rowCount == 0)
+                break;
         }
+        return result;
     }
 
     /**
@@ -448,7 +429,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     public synchronized void flush() {
         super.flush();
         openClusters.values().forEach(Cluster::flush);
-        Set<String> forDeleteKeys = openClusters.entrySet().parallelStream()
+        Set<Integer> forDeleteKeys = openClusters.entrySet().parallelStream()
                 .filter(cluster -> cluster.getValue().hasNotOpenTransactions())
                 .peek(cluster -> cluster.getValue().setDropped(true))
                 .map(Map.Entry::getKey)
@@ -464,7 +445,8 @@ public class FrugalRepository<Record> extends Repository<Record> {
         return clusterNames.parallelStream()
                 .filter(clusterName -> !openClusters.containsKey(clusterName))
                 .mapToLong(clusterName -> {
-                    try (Stream<String> stream = Files.lines(Path.of(directory.getAbsolutePath(), clusterName))) {
+                    try (Stream<String> stream =
+                                 Files.lines(Path.of(directory.getAbsolutePath(), Integer.toString(clusterName)))) {
                         return stream.count();
                     } catch (IOException e) {
                         throw new InternalImnormException(e);
@@ -479,9 +461,9 @@ public class FrugalRepository<Record> extends Repository<Record> {
      */
     private synchronized void checkAndDropIfTooMuchOpenClusters() {
         if (openClusters.size() > maxClustersQuantity) {
-            Iterator<Map.Entry<String, Cluster<Record>>> it = openClusters.entrySet().iterator();
+            Iterator<Map.Entry<Integer, Cluster<Record>>> it = openClusters.entrySet().iterator();
             while (it.hasNext()) {
-                Map.Entry<String, Cluster<Record>> entry = it.next();
+                Map.Entry<Integer, Cluster<Record>> entry = it.next();
                 if (entry.getValue().hasNotOpenTransactions()) {
                     entry.getValue().flush();
                     it.remove();
@@ -495,7 +477,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     protected synchronized void splitClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
             Cluster<Record> newCluster = cluster.split();
-            String firstKeyNewCluster = newCluster.getFirstKey();
+            int firstKeyNewCluster = newCluster.getFirstKey();
             openClusters.put(firstKeyNewCluster, newCluster);
             clusterNames.add(firstKeyNewCluster);
         }
@@ -505,7 +487,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     protected synchronized void deleteClusterIfNeed(final Cluster<Record> cluster) {
         if (cluster.isEmpty()) {
             try {
-                Files.delete(Path.of(directory.getAbsolutePath(), cluster.getFirstKey()));
+                Files.delete(Path.of(directory.getAbsolutePath(), Integer.toString(cluster.getFirstKey())));
             } catch (IOException ignore) {
             }
             clusterNames.remove(cluster.getFirstKey());
@@ -521,15 +503,17 @@ public class FrugalRepository<Record> extends Repository<Record> {
      */
     @Override
     protected boolean existsById(final Object id) {
-        String stringId = getStringHashFromId(id);
-        if (stringId.compareTo(clusterNames.first()) > 0) {
-            String clusterName = clusterNames.floor(stringId);
+        int hashFromId = getHashFromId(id);
+        Integer clusterName = clusterNames.floor(hashFromId);
+        if (Objects.nonNull(clusterName)) {
             Cluster<Record> cluster = openClusters.get(clusterName);
             if (Objects.nonNull(cluster)) {
-                return cluster.containsKey(stringId);
+                return cluster.containsKey(hashFromId, id);
             } else {
-                try (Stream<String> stream = Files.lines(Path.of(directory.getPath(), clusterName))) {
-                    return stream.map(s -> s.substring(0, s.indexOf(':'))).anyMatch(s -> s.equals(stringId));
+                try (Stream<String> stream = Files.lines(Path.of(directory.getPath(), clusterName.toString()))) {
+                    return stream.map(s -> s.substring(0, s.indexOf(':')))
+                            .map(Integer::parseInt)
+                            .anyMatch(s -> s.equals(hashFromId));
                 } catch (IOException e) {
                     throw new InternalImnormException(e);
                 }

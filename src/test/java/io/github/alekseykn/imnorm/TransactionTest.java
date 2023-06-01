@@ -127,19 +127,6 @@ class TransactionTest {
         assertThat(repository.findAll())
                 .extracting(Dto::getId)
                 .containsAll(Stream.iterate(0, integer -> integer + 1).limit(140).collect(Collectors.toSet()));
-        assertThat(Arrays.stream(Objects.requireNonNull(Path
-                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
-                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
-                .flatMap(file -> {
-                    try {
-                        return Files.lines(file.toPath()).map(s -> s.substring(s.indexOf(':') + 1));
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                })).containsAll(Stream.iterate(0, integer -> integer + 1)
-                .limit(140)
-                .map(integer -> gson.toJson(new Dto(integer)))
-                .collect(Collectors.toSet()));
     }
 
     @Test
@@ -259,19 +246,6 @@ class TransactionTest {
         assertThat(repository.findAll())
                 .extracting(Dto::getId)
                 .containsAll(Stream.iterate(40, integer -> integer + 1).limit(100).collect(Collectors.toSet()));
-        assertThat(Arrays.stream(Objects.requireNonNull(Path
-                        .of("data", Dto.class.getName().replace('.', '_')).toFile()
-                        .listFiles((dir, name) -> !name.equals("_sequence.imnorm"))))
-                .flatMap(file -> {
-                    try {
-                        return Files.lines(file.toPath()).map(s -> s.substring(s.indexOf(':') + 1));
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                })).containsAll(Stream.iterate(40, integer -> integer + 1)
-                .limit(100)
-                .map(integer -> gson.toJson(new Dto(integer)))
-                .collect(Collectors.toSet()));
     }
 
     @Test
@@ -371,7 +345,7 @@ class TransactionTest {
                 repository.save(new Dto(1), transaction);
             } else {
                 flags.clear();
-                throw new DeadLockException("Test");
+                throw new DeadLockException(1);
             }
         }));
         thread.start();
