@@ -312,19 +312,22 @@ public final class Cluster<Record> {
      *
      * @return New cluster, in which a part of the records of the current cluster was taken out
      */
-    Cluster<Record> split() {
-        Spliterator<Map.Entry<Integer, Map<Object, Record>>> spliterator = data.entrySet().spliterator();
-        Spliterator<Map.Entry<Integer, Map<Object, Record>>> currentClusterData = spliterator.trySplit();
+    Optional<Cluster<Record>> split() {
+        if(data.size() != 1) {
+            Spliterator<Map.Entry<Integer, Map<Object, Record>>> spliterator = data.entrySet().spliterator();
+            Spliterator<Map.Entry<Integer, Map<Object, Record>>> currentClusterData = spliterator.trySplit();
 
-        data = StreamSupport.stream(currentClusterData, false)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
-                        TreeMap::new));
+            data = StreamSupport.stream(currentClusterData, false)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
+                            TreeMap::new));
 
-        TreeMap<Integer, Map<Object, Record>> newClusterData = StreamSupport.stream(spliterator, false)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
-                        TreeMap::new));
+            TreeMap<Integer, Map<Object, Record>> newClusterData = StreamSupport.stream(spliterator, false)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (firstKey, secondKey) -> firstKey,
+                            TreeMap::new));
 
-        return new Cluster<>(newClusterData.firstKey(), newClusterData, repository);
+            return Optional.of(new Cluster<>(newClusterData.firstKey(), newClusterData, repository));
+        } else
+            return Optional.empty();
     }
 
     /**
