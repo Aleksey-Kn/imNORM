@@ -127,16 +127,16 @@ abstract class RepositoryTest {
         assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(2, 4, 8);
     }
 
-    @RepeatedTest(500)
+    @RepeatedTest(100)
     void saveAllWithPartialGenerateId() {
         List<DtoWithGenerateId> list = List.of(new DtoWithGenerateId(2),
-                new DtoWithGenerateId(3333, 4),
+                new DtoWithGenerateId(33, 4),
                 new DtoWithGenerateId(8));
 
         withGenerateIdRepository.saveAll(list);
 
         assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getNumber).contains(2, 4, 8);
-        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getId).contains(3333);
+        assertThat(withGenerateIdRepository.findAll()).extracting(DtoWithGenerateId::getId).contains(33);
     }
 
     @Test

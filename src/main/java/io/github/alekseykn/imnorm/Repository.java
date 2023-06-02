@@ -1,6 +1,6 @@
 package io.github.alekseykn.imnorm;
 
-import io.github.alekseykn.imnorm.annotations.Id;
+import io.github.alekseykn.imnorm.annotations.GeneratedValue;
 import io.github.alekseykn.imnorm.exceptions.*;
 import io.github.alekseykn.imnorm.utils.ClusterFileManipulator;
 import io.github.alekseykn.imnorm.utils.FieldUtil;
@@ -80,16 +80,16 @@ public abstract class Repository<Record> {
         }
 
         recordId = FieldUtil.getIdField(type);
-        needGenerateId = recordId.getAnnotation(Id.class).autoGenerate();
+        needGenerateId = recordId.getAnnotation(GeneratedValue.class) != null;
         sizeOfEntity = FieldUtil.countFields(type) * 50;
         clusterFileManipulator = new ClusterFileManipulator<>(type, recordId);
 
         if (needGenerateId) {
             try (DataInputStream fileInputStream = new DataInputStream(
                     new FileInputStream(new File(directory.getAbsolutePath(), "_sequence.imnorm")))) {
-                sequence = fileInputStream.readLong();
+                sequence = Math.max(fileInputStream.readLong(), recordId.getAnnotation(GeneratedValue.class).startId());
             } catch (IOException e) {
-                sequence = 1;
+                sequence = recordId.getAnnotation(GeneratedValue.class).startId();
             }
         }
     }
