@@ -323,9 +323,8 @@ public class FastRepository<Record> extends Repository<Record> {
 
     @Override
     protected synchronized void splitClusterIfNeed(final Cluster<Record> cluster) {
-        if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
-            Cluster<Record> newCluster = cluster.split();
-            data.put(newCluster.getFirstKey(), newCluster);
+        if (needSplit(data.size(), cluster.size())) {
+            cluster.split().ifPresent(newCluster -> data.put(newCluster.getFirstKey(), newCluster));
         }
     }
 

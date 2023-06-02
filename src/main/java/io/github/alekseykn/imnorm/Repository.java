@@ -173,6 +173,22 @@ public abstract class Repository<Record> {
     }
 
     /**
+     * Determines whether to split the current cluster based on its size
+     * and the total number of clusters in the repository.
+     * It is necessary in order to control the number of files for clusters
+     * and to prevent an increased load on the file system due to too many of them.
+     *
+     * @param clusterQuantity Total number of clusters in the repository
+     * @param currentClusterSize Number of records in the current cluster
+     * @return Decision on the need to split this cluster
+     */
+    protected boolean needSplit(final int clusterQuantity, final int currentClusterSize) {
+        return clusterQuantity < 1000 && currentClusterSize * sizeOfEntity > CLUSTER_MAX_SIZE
+                || clusterQuantity > 1000
+                && clusterQuantity * sizeOfEntity > CLUSTER_MAX_SIZE * Math.pow((float) currentClusterSize / 1000, 2);
+    }
+
+    /**
      * Find cluster, which can contain record with current id
      *
      * @param id Record id, for which execute search

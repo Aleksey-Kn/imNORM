@@ -101,7 +101,7 @@ public class FrugalRepository<Record> extends Repository<Record> {
     /**
      * Add new cluster and insert current record in current transaction
      *
-     * @param hash          String interpretation of hash
+     * @param hash        String interpretation of hash
      * @param record      The record being added to data storage
      * @param transaction Transaction, in which execute create
      */
@@ -475,11 +475,12 @@ public class FrugalRepository<Record> extends Repository<Record> {
 
     @Override
     protected synchronized void splitClusterIfNeed(final Cluster<Record> cluster) {
-        if (cluster.size() * sizeOfEntity > CLUSTER_MAX_SIZE) {
-            Cluster<Record> newCluster = cluster.split();
-            int firstKeyNewCluster = newCluster.getFirstKey();
-            openClusters.put(firstKeyNewCluster, newCluster);
-            clusterNames.add(firstKeyNewCluster);
+        if (needSplit(clusterNames.size(), cluster.size())) {
+            cluster.split().ifPresent(newCluster -> {
+                int firstKeyNewCluster = newCluster.getFirstKey();
+                openClusters.put(firstKeyNewCluster, newCluster);
+                clusterNames.add(firstKeyNewCluster);
+            });
         }
     }
 
